@@ -149,7 +149,37 @@ When `--enrich` is specified, extracts structured data:
 - Python 3.10-3.12
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - **Docling**: Automatically downloads ML models on first use (~500MB)
-- **Agent**: Requires `claude-agent-sdk` and Claude API access
+
+### Optional Dependencies
+
+#### For `--describe` (AI figure descriptions)
+
+Requires [Ollama](https://ollama.com/) running locally with a vision-capable model:
+
+```bash
+# Install Ollama from https://ollama.com/download
+# Then pull a vision model
+ollama pull llama3.2-vision
+
+# Start the Ollama server (if not running as a service)
+ollama serve
+```
+
+The `--describe` flag uses Ollama to generate natural language descriptions of figures, useful for RAG systems that need to search figure content.
+
+#### For `--agent` (AI cleanup)
+
+Requires [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to have been run at least once on your machine. This sets up the necessary authentication and SDK configuration.
+
+```bash
+# Install and run Claude Code once to set up authentication
+npm install -g @anthropic-ai/claude-code
+claude
+
+# After initial setup, the --agent flag will work
+```
+
+The agent uses the Claude Code SDK to intelligently clean up extraction artifacts, reposition figures, and fix formatting issues.
 
 ## Example Workflow
 
