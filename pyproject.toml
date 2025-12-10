@@ -51,11 +51,11 @@ dev = [
 pdf2md = "pdf2md.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pdf2md"
-Repository = "https://github.com/yourusername/pdf2md"
+Homepage = "https://github.com/JaimeCernuda/paper-to-md"
+Repository = "https://github.com/JaimeCernuda/paper-to-md"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pdf2md"]
+packages = ["pdf2md"]
 
 [tool.ruff]
 line-length = 100

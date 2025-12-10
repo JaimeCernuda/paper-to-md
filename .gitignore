@@ -32,9 +32,6 @@ env/
 *.swp
 *.swo
 
-# Published papers (copyrighted content)
-grc-context/
-
 # RAG documentation (not part of the tool)
 rag/
 
