@@ -158,8 +158,8 @@ Requires [Ollama](https://ollama.com/) running locally with a vision-capable mod
 
 ```bash
 # Install Ollama from https://ollama.com/download
-# Then pull a vision model
-ollama pull llama3.2-vision
+# Then pull the llava model
+ollama pull llava:7b
 
 # Start the Ollama server (if not running as a service)
 ollama serve
