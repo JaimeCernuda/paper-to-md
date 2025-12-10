@@ -1,0 +1,12 @@
+[project]
+name = "iowarp-publications"
+version = "0.1.0"
+description = "Download IOWarp/Kougkas publications PDFs and citations"
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+iowarp-pubs = "main:main"

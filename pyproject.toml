@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pdf2md"
+version = "0.2.0"
+description = "Convert academic PDF papers to clean markdown using Docling + Claude cleanup"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = "MIT"
+authors = [
+    { name = "Jaime Cernuda", email = "jcernudagarcia@hawk.iilinoistech.edu" }
+]
+keywords = ["pdf", "markdown", "academic", "docling", "extraction"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+dependencies = [
+    "typer>=0.15.0",
+    "rich>=13.0.0",
+    "Pillow>=10.0.0",
+    "pymupdf>=1.26.6",
+]
+
+[project.optional-dependencies]
+docling = [
+    "docling>=2.0.0",
+]
+agent = [
+    "claude-agent-sdk>=0.1.14",
+]
+all = [
+    "docling>=2.0.0",
+    "claude-agent-sdk>=0.1.14",
+]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+pdf2md = "pdf2md.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/pdf2md"
+Repository = "https://github.com/yourusername/pdf2md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pdf2md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+# Note: ROCm PyTorch is Linux-only. On Windows, Docling's internal models
+# run on CPU, while VLM descriptions go through Ollama API which uses
+# ollama-for-amd with ROCm support for AMD GPUs.
