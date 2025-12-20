@@ -1,0 +1,391 @@
+{
+  "metadata": {
+    "source": "/home/shazzadul/Illinois_Tech/Spring26/RA/Github/paper-to-md/grc-context/publications/pdfs/devarajan-2024-dftracer-8fcb.pdf",
+    "title": "devarajan-2024-dftracer-8fcb",
+    "num_pages": 24,
+    "num_code_blocks": 44,
+    "num_equations": 0,
+    "num_figures": 14
+  },
+  "code_blocks": [
+    {
+      "text": "are called to support language-native semantics.\n\nite.        = 1\n    #include <dftracer/dftracer.h>\n    void foo() {\n      DFTRACER_CPP_FUNCTION();\n  parallel 4  {\n    DFTRACER_CPP_REGION(CUSTOM);\n    DFTRACER_CPP_REGION_START(BLOCK);\n  struct a 7   DFTRACER_CPP_REGION_END(BLOCK); // END BLOCK\n  workers 8  } // DFTRACER_CPP_REGION ends here implicitly\n  requires   =\n    1\n",
+      "language": "C++",
+      "page": 5,
+      "context": ""
+    },
+    {
+      "text": "from dfttracer.logger import dft_fn\n    dft_fn = dft_fn(\"COMPUTE\")\n    @dft_fn.log\n    def compute(self, index):\n    with dft_fn(cat=\"block\", name=\"step\") as dft:\n      sleep(1)\n",
+      "language": "Python",
+      "page": 6,
+      "context": ""
+    },
+    {
+      "text": "from dlp_analyzer.main import DLPAnalyzer, setup_dask_cluster\nsetup_dask_cluster()\nanalyzer = DFA analyzer(filename)\nanalyzer.summary()\nanalyzer.events.groupby(\"name\")[\"size\"].sum().compute() / 1024**3\n",
+      "language": "Python",
+      "page": 6,
+      "context": ""
+    },
+    {
+      "text": "#!/bin/bash\n    git clone git@github.com:spack/spack.git\n    source spack/share/spack/setup-env.sh\n    spack external find # to find system packages.\n    module load gcc/10.3.1 # load correct compilers\n    spack compiler find\n",
+      "language": "Bash",
+      "page": 14,
+      "context": ""
+    },
+    {
+      "text": "#!/bin/bash\nspack install scorep@8.3\nspack install darshan-runtime@3.4.4\nspack install darshan-util@3.4.4\nspack install recorder@pilgrim\n",
+      "language": "Bash",
+      "page": 14,
+      "context": ""
+    },
+    {
+      "text": "#!/bin/bash\nsource ./venv/bin/activate\npip install darshan recorder-viz otf2\n",
+      "language": "Bash",
+      "page": 14,
+      "context": ""
+    },
+    {
+      "text": "remove\n\nnodes;\n\nGB of\n  python -m venv ./venv\n\noptional\n  source venv/bin/activate\n\nwith\n  for cur\n",
+      "language": "Bash",
+      "page": 14,
+      "context": ""
+    },
+    {
+      "text": "Artifact Analysis (incl. Outputs)\n",
+      "language": "Python",
+      "page": 19,
+      "context": ""
+    },
+    {
+      "text": "export PROJECT_DIR=<PATH to DFTracer clone>\n",
+      "language": "C",
+      "page": 19,
+      "context": ""
+    },
+    {
+      "text": "A. Computational Artifact A1\n\nArtifact Setup (incl. Inputs)\n",
+      "language": "COBOL",
+      "page": 19,
+      "context": ""
+    },
+    {
+      "text": "#!/bin/bash\n    mkdir -p ${PFS}/dlio\n    export PFS=<PATH_TO_PFS>\n    # Generate the dataset\n    srun -N 1 --tasks-per-node=8 dlio_benchmark\n        <> workload=unet3D ++workload.dataset.\n        <> data_folder=${PFS}/dlio ++workload.\n        <> workflow.generate_data=True ++workload.\n        <> workflow.train=False\n",
+      "language": "Bash",
+      "page": 19,
+      "context": ""
+    },
+    {
+      "text": "Run Unet3D with Darshan DXT\n\n#!/bin/bash\nexport DARSHAN_ENABLE_NGNMPI=1\nexport DARSHAN_LOG_DIR=./darshan_logs\nexport dtftracer_ENABLE=0\nexport DXT_ENABLE_IO_TRACE=1\nexport DARSHAN_LIB=`space locate -i darshan-\n    <> runtime@3.4.4 `/lib/libdarshan.so\nsrun -N 1 --tasks-per-node=8 export=LD_PRELOAD=\n    <> $DARSHAN_LIB dlio_benchmark workload=\n    <> unet3D ++workload.dataset.data_folder=${\n    <> FPS}/dlio ++workload.workflow.\n    <> generate_data=True ++workload.workflow.\n    <> train=False\n",
+      "language": "Bash",
+      "page": 19,
+      "context": ""
+    },
+    {
+      "text": "#!/bin/bash\nexport dftracer_ENABLE=0\nexport RECORDER_LIB=`spack locate -i\n    <> recorder@pilgrim/lib/librecoorder.so\n",
+      "language": "Bash",
+      "page": 19,
+      "context": ""
+    },
+    {
+      "text": "|srun -N 1 --tasks-per-node=8 export=LD_PRELOAD= | |srun -c $RECORDER_LIB dlio_benchmark workload=        |    ~c\n        <> $RECORDER_LIB dlio_benchmark workload=        |    ~c\n        <> net3D ++workload.dataset.data_folder=${{\n        <> PFS}/dlio ++workload.workflow.\n        <> generate_data=True ++workload.workflow.\n        <> train=False\n",
+      "language": "PHP",
+      "page": 20,
+      "context": ""
+    },
+    {
+      "text": "Run Unet3D with Score-p\n\nexport dftracer_ENABLE=0\nsource ./venv/bin/activate\ngit clone git+https://github.com/argonne-lcf/\n    >> dlio_benchmark.git\nsrun -N 1 --tasks-per-node=8 python -m scorep\n    >> dlio_benchmark/dlio_benchmark/main.py\n    >> workload=unet3D ++workload.dataset.\n    >> data_folder=${FPS}/dlio ++workload.\n    >> workflow.generate_data=True ++workload.\n    >> workflow.train=False\n                Listing 9. bash version\n",
+      "language": "Bash",
+      "page": 20,
+      "context": ""
+    },
+    {
+      "text": "Run Unet3D with DFTracer\n\nexport dftracer_ENABLE=1\nsrun -N 1 --tasks-per-node=8 dlio_benchmark\n    < workload=unet3D ++workload.dataset.\n    > data_folder=${FPS}/dlio ++workload.\n    > workflow.generate_data=True ++workload.\n    > workflow.train=False\n",
+      "language": "Bash",
+      "page": 20,
+      "context": ""
+    },
+    {
+      "text": "B.  Computational Artifact Aerotect A_{\n      Artifactact Setup (incl. Inputs)",
+      "language": "COBOL",
+      "page": 20,
+      "context": ""
+    },
+    {
+      "text": "<srun -N 1 --ntasks-per-node 40 ./build/bin/\n      >overhead \"${FPS}/dftracer_data\" \"1000\" \"\n      > 4096\"\n",
+      "language": "XML",
+      "page": 20,
+      "context": ""
+    },
+    {
+      "text": "LOAD= |srun -N 2 --ntasks-per-node 40 ./build/bin/\nead=         <> overhead \"${FPS}/dftracer_data\" \"1000\" \"\ner=${{\n       <> 4096\"\n   srun -N 4 --ntasks-per-node 40 ./build/bin/\n       <>  overhead \"${FPS}/dftracer_data\" \"1000\" \"\n       <> 4096\"\n   srun -N 8 --ntasks-per-node 40 ./build/bin/\n       <>  overhead \"${FPS}/dftracer_data\" \"1000\" \"\n       <> 4096\"\n                            Listing 11. bash version",
+      "language": "Bash",
+      "page": 20,
+      "context": ""
+    },
+    {
+      "text": "srun -N 8 --rtasks-per-node  40  ./build/bin/\n\t\t\t\t> overheaded \"${FPS}/dftracer_data\" \"1000\" \"\n\t\t\t\t> 4096\"\n\t\t\t\t\t\tListing 11. bash version\n\t\tfct/\n\t\texport DARSHAN_ENABLE_NONMPI=1\n\t\texport dftracer_ENABLE=0\n\t\texport DXT_ENABLE_IO_TRACE=1\n\n\t\texport DARSHAN_LOG_DIR=${PROJECT_DIR}/\n\t\tmkdir -p ${DARSHAN_LOG_DIR}\n\t\tmkdir -p ${DARSHAN_LOG_DIR}\n\t\tsrun -N 1 --rtasks-per-node 40 ./build/bin/\n\t\t\t\t> overheaded --export=LD_PRELOAD=`spack\n\t\t\t\t> location -I darshan-runtime@3.4.4`/lib/\n\t\t\t\t> libdarran.so \"${FPS}/dftracer_data\" \"\n\t\t\t\t> 1000\" \"\n\t\t\texport DARSHAN_LOG_DIR=${PROJECT_DIR}/\n\t\t\t> darshan_logs/c-node2\n\t\tmkdir -p ${DARSHAN_LOG_DIR}\n\t\tsrun -N 2 --rtasks-per-node 40 ./build/bin/\n\t\t\t\t> overheaded --export=LD_PRELOAD=`spack\n\t\t\t\t> location -I darshan-runtime@3.4.4`/lib/\n\t\t\t\t> -i1.darr.sha.n.so \"${FPS}/dftracer_data\" \"\n\t\t\t\t> 1000\" \"\n\tsee I/O  export DARSHAN_LOG_DIR=${PROJECT_DIR}/\n\tpython \t\t-d darshan_logs/c-node4\n\tthen\t\tmkdir -p ${DARSHAN_LOG_DIR}\n\t\tsrun -N 4 --rtasks-per-node 40 ./build/bin/\n\t\t> Dar-overhead --export=LD_PRELOAD=`spack\n\t\t\t\t> location -i darshan-runtime@3.4.4`/lib/\n\t\t\t\t> libdarran.so \"${FPS}/dftracer_data\" \"\n\t\t\t\t> 1000\" \"\n\t\t\texport DARSHAN_LOG_DIR=${PROJECT_DIR}/\n\t\t\"10.3.1\" \t> darshan_logs/c-node8\n\t\t.test.can \tmkdir -p ${DARSHAN_LOG_DIR}\n\t\tsln the \t$N \t-r tasks-per-node 40  ./build/bin/\n\t\t\t\t> overheaded --export=LD_PRELOAD=`spack\n\t\t\t\t> location -I darshan-runtime@3.4.4`/lib/\n\t\t\t\t> libdarran.so \"${FPS}/dftracer_data\" \"\n\t\tscripts \t\t> 1000\" \"4096\"\n\t\tcompare\t\t\t> Listing 12. bash version\n\n\t\t\tRecorder\n\t\t\texport dftracer_ENABLE=0\n\t\t/export dftracer_LIB=`spack locate -i\n\t\t\t\t> recorder@pilgrim`/lib/librecoorder.so\n",
+      "language": "Bash",
+      "page": 20,
+      "context": ""
+    },
+    {
+      "text": "export dftracer_ENABLE=0\nexport RECORDER_LIB=`spack locate -i`\n  <> recorder@pilgrim/lib/librecorder.so\n",
+      "language": "TypeScript",
+      "page": 20,
+      "context": ""
+    },
+    {
+      "text": "|export RECORNER_TRACES_DIR=${PROJECT_DIR}/            |mv\n    <- recorder_logs/c-node1\nmkdir -p $RECORNER_TRACES_DIR\nsrun -N 1 --ntasks-per-node 40 ./build/bin/\n    -o read -export=LD_PRELOAD=\n    - $RECORNER_LIB \"${FPS}/dftracer_data\" \"                 \"\n    - > 1000\" \"4096\"\nexport RECORNER_TRACES_DIR=${PROJECT_DIR}/\n    -> recorder_logs/c-node2\nmkdir -p $RECORNER_TRACES_DIR\nsrun -N 2 --ntasks-per-node 40 ./build/bin/\n    - > overhead --export=LD_PRELOAD=\n    - > $RECORNER_LIB \"${FPS}/dftracer_data\" \"                 \"\n    - > 1000\" \"4096\"\nexport RECORNER_TRACES_DIR=${PROJECT_DIR}/\n    - > recorder_logs/c-node4\nmkdir -p $RECORNER_TRACES_DIR\nsrun -N 4 --ntasks-per-node 40 ./build/bin/\n    - > overhead --export=LD_PRELOAD=\n    - > $RECORNER_LIB \"${FPS}/dftracer_data\" \"                 \"\n    - > 1000\" \"4096\"\nexport RECORNER_TRACES_DIR=${PROJECT_DIR}/\n    - > recorder_logs/c-node8\nmkdir -p $RECORNER_TRACES_DIR\nsrun -N 8 --ntasks-per-node 40 ./build/bin/\n    - > overhead --export=LD_PRELOAD=\n    - > $RECORNER_LIB \"${FPS}/dftracer_data\" \"                 \"\n    - > 1000\" \"4096\"\n\nScorep\n\nmkdir -p ${PROJECT_DIR}/score-p_logs\n",
+      "language": "Bash",
+      "page": 21,
+      "context": ""
+    },
+    {
+      "text": "Listing 13. bash version\n    Srun -N 1 --ntasks-per-node 40 ./build_scorep/\n        <!-- bin/overhead export=LD_PRELOAD=\n        --> $RECORDER_LIB \"${PFS}/dftracer_data\" \"\n        --> 10000\" \"4096\"\nmv scorep-* ${PROJECT_DIR}/score-p_logs/c-node1\n\nsrun -N 2 --ntasks-per-node 40 ./build_scorep/\n        --> bin/overhead export=LD_PRELOAD=\n        --> $RECORDER_LIB \"${PFS}/dftracer_data\" \"\n        --> 1000\" \"4096\"\nmv scorep-* ${PROJECT_DIR}/score-p_logs/c-node2\n\nsrun -N 4 --ntasks-per-node 40 ./build_scorep/\n        --> bin/overhead export=LD_PRELOAD=\n        --> $RECORDER_LIB \"${PFS}/dftracer_data\" \"\n        --> 1000\" \"4096\"\nmv scorep-* ${PROJECT_DIR}/score-p_logs/c-node4\n\nsrun -N 8 --ntasks-per-node 40 ./build_scorep/\n        --> bin/overhead export=LD_PRELOAD=\n        --> $RECORDER_LIB \"${PFS}/dftracer_data\" \"\n        --> 1000\" \"4096\"\n",
+      "language": "Bash",
+      "page": 21,
+      "context": ""
+    },
+    {
+      "text": "| mv score-* ${PROJECT_DIR}/score-p_logs/c-node8 |\n                Listing 14. bash version\n/\n    DFTracer\n  \" export DFTRACER_SO=${PROJECT_DIR}/build/lib/\n       --> libdftracer_preload.so\n  export DFTRACER_DATA_DIR=${PROJECT_DIR}/build/\n         --> test/paper/data\n  export DFTRACER_INIT=PRELOAD\n  --export DFTRACER_ENABLE=1\n  --export DFTRACER_TRACE_COMPRESSION=1\n  export DFTRACER_INC_METADATA=0\n  \" export DFTRACER_TRACE_ALL_FILES=1\n  export DFTRACER_TRACE_TIDS=0\n  export DFTRACER_BIND_SIGNALS=0\n\n  export DFTRACER_LOG_FILE=${PROJECT_DIR}/\n       --> dftracer_logs/c-node1/overhead\n  \" srun -N 1 -n tasks-per-node 40 ./build/bin/\n\"       --> overhead export=LD_PRELOAD=$DFTRACER_SO \"\n       --> ${FPS}/dftracer_data\" \"1000\" \"4096\"\n  export DFTRACER_LOG_FILE=${PROJECT_DIR}/\n       --> dftracer_logs/c-node2/overhead\n  srun -N 2 --n tasks-per-node 40 ./build/bin/\n       --> overhead export=LD_PRELOAD=$DFTRACER_SO \"\n       --> ${FPS}/dftracer_data\" \"1000\" \"4096\"\n  \" export DFTRACER_LOG_FILE=${PROJECT_DIR}/\n       --> dftracer_logs/c-node4/overhead\n  srun -N 4 --n tasks-per-node 40 ./build/bin/\n       --> overhead export=LD_PRELOAD=$DFTRACER_SO \"\n       --> ${FPS}/dftracer_data\" \"1000\" \"4096\"\n  export DFTRACER_LOG_FILE=${PROJECT_DIR}/\n       --> dftracer_logs/c-node8/overhead\n  srun -N 8 --n tasks-per-node 40 ./build/bin/\n       --> overhead export=LD_PRELOAD=$DFTRACER_SO \"\n       --> ${FPS}/dftracer_data\" \"1000\" \"4096\"\n\"\nnode1\n\n  Artifact Analysis (incl. Outputs)\n    The reported time for I/O for each tool in comparison\n  to the baseline would provide the overhead.",
+      "language": "Bash",
+      "page": 21,
+      "context": ""
+    },
+    {
+      "text": "Artifact Analysis (incl. Outputs)\n",
+      "language": "Cython",
+      "page": 21,
+      "context": ""
+    },
+    {
+      "text": "C. Computational Artifact A3\n\tArtifact Setup (incl. Inputs)",
+      "language": "SQL",
+      "page": 21,
+      "context": ""
+    },
+    {
+      "text": "Artifact Execution",
+      "language": "SQL",
+      "page": 21,
+      "context": ""
+    },
+    {
+      "text": "srun -N 1 --ntasks-per-node 40 python ${\n    <> PROJECT_DIR}/test/paper/overhead.py \"${\n    <> FPS}/dftracer_data\" \"1000\" \"4096\"\nsrun -N 2 --ntasks-per-node 40 python ${\n    <> PROJECT_DIR}/test/paper/overhead.py \"${\n    <> FPS}/dftracer_data\" \"1000\" \"4096\"\nsrun -N 4 --ntasks-per-node 40 python ${\n    <> PROJECT_DIR}/test/paper/overhead.py \"${\n    <> FPS}/dftracer_data\" \"1000\" \"4096\"\nsrun -N 8 --ntasks-per-node 40 python ${\n    <> PROJECT_DIR}/test/paper/overhead.py \"${\n    <> FPS}/dftracer_data\" \"1000\" \"4096\"",
+      "language": "Bash",
+      "page": 22,
+      "context": ""
+    },
+    {
+      "text": "> - PFS/dtracer_data\" \"1000\" \"4096\"\n        srun -N 8 -nTASKs-per-node 40 python ${\n                - > PROJECT_DIR}/test/paper/overhead.py \"${{\n                > PFS}/dtracer_data\" \"1000\" \"4096\"\n                                                        ->\n                Darshan DXT'\n            export DARSHAIN_ENABLE_NONMPI=1\n            export DFTRACER_ENABLE=0\n            export DXT_ENB_IO_TRACE=1\n                                                                export > - > DARSHAIN_LOG_DIR\n            export DARSHAIN_LOG_DIR=${PROJECT_DIR}/\n                - > darshaan_logs/py-node1\n            mkdir -p ${DARSHAIN_LOG_DIR}\n            srun -N 1 -nTASKs-per-node 40 --export=\n                > LD_PRELOAD=`spack location -I darshan-\n                > runtime@E3.4/lib/libdarshaan.so python $\n                > {PROJECT_DIR}/test/paper/overhead.py \"\n                > darshan_overhead_py\" \"${PFS}/mkdir -r srun - -d ftraccer_data\" \"1000\" \"4096\"\n                > dstrach_n_LOGS-py=${PROJECT_DIR}/\n                > darshaan_logs/py-node2\n            mkdir -p ${DARSHAIN_LOG_DIR}\n            srun -N 2 --nTASKs-per-node 40 --export=\n                > LD_PRELOAD=`spack location -I darshan-\n                > runtime@E3.4/lib/libdarshaan.so python $\n                > {PROJECT_DIR}/test/paper/overhead.py \"\n                > darshaan_overhead_py\" \"${PFS}/mkdir -r srun - -d ftraccer_data\" \"1000\" \"4096\"\n            export DARSHAIN_LOG_DIR=${PROJECT_DIR}/\n                > darshaan_logs/py-node4\n            mkdir -p ${DARSHAIN_LOG_DIR}\n            srun -N 4 --nTASKs-per-node 40 --export=\n                > LD_PRELOAD=`spack location -I darshan-\n                > runtime@E3.4/lib/libdarshaan.so python $\n                > {PROJECT_DIR}/test/paper/overhead.py \"\n                > darshaan_overhead_py\" \"${PFS}/mkdir -r srun - -d ftraccer_data\" \"1000\" \"4096\"\n            export DARSHAIN_LOG_DIR=${PROJECT_DIR}/\n                > darshaan_logs/py-node8\n            mkdir -p ${DARSHAIN_LOG_DIR}\n            srun -N 8 --nTASKs-per-node 40 --export=\n                > LD_PRELOAD=`spack location -I darshan-\n                > runtime@E3.4/lib/libdarshaan.so python $\n                > {PROJECT_DIR}/test/paper/overhead.py \"\n                > darshaan_overhead_py\" \"${PFS}/mkdir -r srun - -d ftraccer_data\" \"1000\" \"4096\"",
+      "language": "Bash",
+      "page": 22,
+      "context": ""
+    },
+    {
+      "text": "${{\n      Recorder\n  \"${{ export DFTRACER_ENABLE=0\n    export RECORDER_LIB=`spack locate -i\n        -o recorder@pilgrim/lib/librecorder.so\n  \"${{ export RECORDER_TRACES_DIR=${PROJECT_DIR}/\n        -o recorder_logs/pv-node1\n    \"${{ mkdir -p $RECORDER_TRACES_DIR\n    srun -N 1 --nTASKS=per-node 40 --export=\n        - > LD_PRELOAD=$RECORDER_LIB python ${\n        - > PROJECT_DIR}/test/paper/overhead.py \"\n        - > recorder_overhead_py\" \"${PFJS}/\n        - > dftracer_data\" \"1000\"\n    \"\n    export RECORDER_TRACES_DIR=${PROJECT_DIR}/\n        -o recorder_logs/py-node2\n    mkdir -p $RECORDER_TRACES_DIR\n    srun -N 2 --nTASKS=per-node 40 --export=\n        - > LD_PRELOAD=$RECORDER_LIB python ${\n        - > PROJECT_DIR}/test/paper/overhead.py \"${\n        - > PFS}/dftracer_data\" \"1000\"\nan-\n  export RECORDER_TRACES_DIR=${PROJECT_DIR}/\n      -o recorder_logs/py-node4\n    mkdir -p $RECORDER_TRACES_DIR\n    srun -N 4 --nTASKS=per-node 40 --export=\n          - > LD_PRELOAD=$RECORDER_LIB python ${\n          - > PROJECT_DIR}/test/paper/overhead.py \"${\n          - > PFS}/dftracer_data\" \"1000\" \"4096\"\nan-\n  export RECORDER_TRACES_DIR=${PROJECT_DIR}/\n  \"\n  mkdir -p $RECORDER_LOGS/py-node8\n  y \"\n    mkdir -p $RECORDER_TRACES_DIR\n    srun -N 8 --nTASKS=per-node 40 --export=\n          - > LD_PRELOAD=$RECORDER_LIB python ${\n          - > PROJECT_DIR}/test/paper/overhead.py \"${\n          - > PFS}/dftracer_data\" \"1000\" \"4096\"\n\nan-\n  $scorep\n  y \"\n    mkdir -p ${PROJECT_DIR}/score-p_logs\n",
+      "language": "Bash",
+      "page": 22,
+      "context": ""
+    },
+    {
+      "text": "Scorep\n  cy \"\n    mkdir -p ${PROJECT_DIR}/score-p_logs\n\n    srun -N 1 --ntasks-per-node 40 python -m scorep\n        <- -mpp=mpi --io=runtime:posix ${\n        < PROJECT_DIR}/test/paper/overhead.py \"\n        < scorep_overhead_py\" \"${PFS}/dftracer_data\n        <> \" \"1000\" \"4096\"\n    mv scorep-* ${PROJECT_DIR}/score-p_logs/py-node1\n  cy \"\n    srun -N 2 --ntasks-per-node 40 python -m scorep\n        <- -mpp=mpi --io=runtime:posix ${\n        < PROJECT_DIR}/test/paper/overhead.py \"",
+      "language": "Bash",
+      "page": 22,
+      "context": ""
+    },
+    {
+      "text": ">  scope_overhead_py\" \"${PFS}/dftracer_data|mkdir -p\" \"1000\" \"4096\"\nmv score-* ${PROJ.IF_DIR}/score-p_logs/py-node2\n\nsrun -N 4 --ntasks-per-node 40 python -m scorep\n    <> --mpp=mpi --io=runtime:posix ${PROJECT_DIR}/test/paper/overhead.py \"\n    <> scorep_overhead_py\" \"${PFS}/dftracer_data\n  mv score-* \"${PROJECT_DIR}/score-p_logs/py-node4\"\n                    to the b\n  srun -N 8 --ntasks-per-node 40 python -m scorep\n      <> --mpp=mpi --io=runtime:posix ${PROJECT_DIR}/test/paper/overhead.py \"\n      <> scorep_overhead_py\" \"${PFS}/dftracer_data\"   The I\n      <> \" \" \"1000\" \"4096\"\n  mv score-* ${PROJECT_DIR}/score-p_logs/py-node8\n                    Listing 19. bash version\n\nDFTracer\n            \"I000\" \"4096\"\n    mv score-* ${PROJECT_DIR}/score-p_logs/py-node8\n            be execsite\n            repository\n\nDFTracer\n",
+      "language": "Bash",
+      "page": 23,
+      "context": ""
+    },
+    {
+      "text": ") \"  \" 1000\" \"4096\"\n        mv score-* ${PROJECT_DIR}/score-p_logs/py-node8 \tbe execute\n                Listing 19.  bash version\n\t\tDFTracer\n\t\texport DFTRACER_DATA_DIR=${PROJECT_DIR}/build/\n            -> test/paper/data\n\t\texport DFTRACER_INITFCTION\n\t\texport DFTRACER_ENABLE=1\n\t\texport DFTRACER_TRACE_COMPRESSION=1\n\t\texport DFTRACER_INC_METADATA=0\n\t\texport DFTRACER_TRACE_TIDS=0\n\t\texport DFTRACER_BIND_SIGNALS=0\n\n\t\texport DFTRACER_LOG_FILE=${PROJECT_DIR}/\n            -> dftracer_logs/py-node1/overhead\n\t\tmkdir -p ${DFTRACER_LOG_FILE}\n\t\tsrun -N 1 --nTASKS-per-node 40 python ${\n            <> PROJECT_DIR}/test/paper/overhead.py \"\n            <> df_ovehead_py\" \"${PFS}/dftracer_data\" \"  \"\n            <> 1000\" \"4096\"\n\n\t\texport DFTRACER_LOG_FILE=${PROJECT_DIR}/\n            -> dftracer_logs/py-node2/overhead\n\t\tmkdir -p ${DFTRACER_LOG_FILE}\n\t\tsrun -N 2 --nTASKS-per-node 40 python ${\n            <> PROJECT_DIR}/test/paper/ovehead.py \"\n            <> df_ovehead_py\" \"${PFS}/dftracer_data\" \"  \"\n            <> 1000\" \"4096\"\n\n\t\texport DFTRACER_LOG_FILE=${PROJECT_DIR}/\n            -> dftracer_logs/py-node4/overhead\n\t\tmkdir -p ${DFTRACER_LOG_FILE}\n\t\tsrun -N 4 --nTASKS-per-node 40 python ${\n            <> PROJECT_DIR}/test/paper/ovehead.py \"\n            <> df_ovehead_py\" \"${PFS}/dftracer_data\" \"  \"\n            <> 1000\" \"4096\"\n\n\t\texport DFTRACER_LOG_FILE=${PROJECT_DIR}/\n            -> dftracer_logs/py-node8/overhead\n                        Score\n",
+      "language": "Bash",
+      "page": 23,
+      "context": ""
+    },
+    {
+      "text": "r_data | mkdir -p ${DFTRACER_LOG_FILE}\n    srun -N 8 --ntasks-per-node 40 python ${\n    --node2\n        <> PROJECT_DIR}/test/paper/overhead.py \"\n        <> df_overhead_py\" \"${PSF}/dftracer_data\" \"\n        <> 1000\" \"4096\"",
+      "language": "Bash",
+      "page": 23,
+      "context": ""
+    },
+    {
+      "text": "D.\tComputational Artifact A4\n\tArtifact Setup (incl. Inputs)",
+      "language": "SQL",
+      "page": 23,
+      "context": ""
+    },
+    {
+      "text": "logs are generated by the C overhead tests.\n      Darsham DXT using pydarshan and Dask\n\n     ${PROJECT_DIR}/test/papeer/load_darshan.py --\n          <> workers=40 ${PROJECT_DIR}/darshan_logs/c-\n          <> node1/*.darshan\n     ${PROJECT_DIR}/test/papeer/load_darshan.py --\n          <> workers=40 ${PROJECT_DIR}/darshan_logs/c-\n          <> node2/*.darshan\n     ${PROJECT_DIR}/test/papeer/load_darshan.py --\n          <> workers=40 ${PROJECT_DIR}/darshan_logs/c-\n          <> node4/*.darshan\n     ${PROJECT_DIR}/test/papeer/load_darshan.py --\n          <> workers=40 ${PROJECT_DIR}/darshan_logs/c-\n          <> node8/*.darshan\n",
+      "language": "XML",
+      "page": 23,
+      "context": ""
+    },
+    {
+      "text": "Recorder using recorder-viz and Dask\n    ${PROJECT_DIR}/test/paper/load_recorder.py --\n    \"      <workers=40 ${PROJECT_DIR}/recorder_logs/c\n    \"      <node1\n    ${PROJECT_DIR}/test/paper/load_recorder.py --\n        <workers=40 ${PROJECT_DIR}/recorder_logs/c\n        <node2\n    ${PROJECT_DIR}/test/paper/load_recorder.py --\n        <workers=40 ${PROJECT_DIR}/recorder_logs/c\n        <node4\n    ${PROJECT_DIR}/test/paper/load_recorder.py --\n        <workers=40 ${PROJECT_DIR}/recorder_logs/c\n        <node8\n                         Listing 22. bash version",
+      "language": "Bash",
+      "page": 23,
+      "context": ""
+    },
+    {
+      "text": "${PROJECT_DIR}/test/paper/load_scorep.py --\n      -> workers=40 ${PROJECT_DIR}/score-p_logs/c-\n      -> node1\n  ${PROJECT_DIR}/test/paper/load_scorep.py --\n      -> workers=40 ${PROJECT_DIR}/score-p_logs/c-\n      -> node2\n  ${PROJECT_DIR}/test/paper/load_scorep.py --\n      -> workers=40 ${PROJECT_DIR}/score-p_logs/c-\n      -> node4\n  ${PROJECT_DIR}/test/paper/load_scorep.py --\n      -> workers=40 ${PROJECT_DIR}/score-p_logs/c-\n      -> node8\n                        Listing 23. bash version\n",
+      "language": "XML",
+      "page": 24,
+      "context": ""
+    },
+    {
+      "text": "DFTracer\n    ${PROJECT_SOURCE_DIR}/df_analyzer/main.py ${\n        <> PROJECT_DIR}/dftracer_logs/c-node1/\n        <> overhead*.pfw\n    ${PROJECT_SOURCE_DIR}/df_analyzer/main.py ${\n        <> PROJECT_DIR}/dftracer_logs/c-node2/\n        <> overhead*.pfw\n    ${PROJECT_SOURCE_DIR}/df_analyzer/main.py ${\n        <> PROJECT_DIR}/dftracer_logs/c-node4/\n        <> overhead*.pfw\n    ${PROJECT_SOURCE_DIR}/df_analyzer/main.py ${\n        <> PROJECT_DIR}/dftracer_logs/c-node8/\n        <> overhead*.pfw\n",
+      "language": "XML",
+      "page": 24,
+      "context": ""
+    },
+    {
+      "text": "Artifact Analysis (incl. Outputs)",
+      "language": "SQL",
+      "page": 24,
+      "context": ""
+    },
+    {
+      "text": "E.  Computational Artifact A_5\n    Artifact Setup (incl. Inputs)",
+      "language": "SQL",
+      "page": 24,
+      "context": ""
+    },
+    {
+      "text": "Generate the dataset\n    mkdir -p ${PFS}/dlio\n    export PFS=<PATH_TO_PFS>\n    # Generate the dataset\n    srun -N 32 --tasks-per-node=8 dlio_benchmark\n        < workload=unet3D ++workload.dataset.\n        <> data_folder=${PFS}/dlio ++workload.\n        <> workflow.generate_data=True ++workload.\n        <> workflow.train=False\n",
+      "language": "Bash",
+      "page": 24,
+      "context": ""
+    },
+    {
+      "text": "Listing 25. bash version\n ogs/c-\n    Run the Workload\n--\n ogs/c-\n    export DFTRACER_ENABLE=1\n    srun -N 32 --tasks-per-node=8 dlio_benchmark\n        < -workload=unet3D ++workload.dataset.\n        < data_folder=${FPS}/dlio ++workload.\n        < workflow.generate_data=False ++workload.\n        < workflow.train=True ++workload.output.\n        < folder=${PROJECT_DIR}/output\n                        Listing 26. bash version\n",
+      "language": "Bash",
+      "page": 24,
+      "context": ""
+    },
+    {
+      "text": "${PROJECT_SOURCE_DIR}/df_analyzer/main.py ${\n        <> PROJECT_DIR}/output/*.pfw\n}\n",
+      "language": "XML",
+      "page": 24,
+      "context": ""
+    }
+  ],
+  "equations": [],
+  "figures": [
+    {
+      "figure_id": 1,
+      "caption": "",
+      "classification": "logo (0.98)",
+      "description": null,
+      "page": 1,
+      "image_path": "./img/figure1.png"
+    },
+    {
+      "figure_id": 2,
+      "caption": "",
+      "classification": "logo (0.96)",
+      "description": null,
+      "page": 1,
+      "image_path": "./img/figure2.png"
+    },
+    {
+      "figure_id": 3,
+      "caption": "Figure 1: DFTracer contains a unified interface exposed to multiple level events. These events are buffered into larger chunks, written to disk as JSON lines, and compressed. The DFAnalyzer loads the trace files, indexes them, and creates a Dask dataframe to extract insights from the workflow.",
+      "classification": "other (0.69)",
+      "description": null,
+      "page": 3,
+      "image_path": "./img/figure3.png"
+    },
+    {
+      "figure_id": 4,
+      "caption": "Figure 2: The DFAnalyzer efficiently reads all trace files in a parallel and pipelined manner.",
+      "classification": "other (0.61)",
+      "description": null,
+      "page": 5,
+      "image_path": "./img/figure4.png"
+    },
+    {
+      "figure_id": 5,
+      "caption": "Figure 3: The average runtime overhead as compared to baseline on C/C++ benchmark for DFTracer is 5-7%, Recorder is 16%, Score-P is 20%, and Darshan DXT is 21%.",
+      "classification": "bar_chart (1.00)",
+      "description": null,
+      "page": 7,
+      "image_path": "./img/figure5.png"
+    },
+    {
+      "figure_id": 6,
+      "caption": "",
+      "classification": "bar_chart (1.00)",
+      "description": null,
+      "page": 8,
+      "image_path": "./img/figure6.png"
+    },
+    {
+      "figure_id": 7,
+      "caption": "Figure 5: Loading trace data from DFTracer using DFAnalyzer is 3.3-3.7x faster than PyDarshan.",
+      "classification": "bar_chart (1.00)",
+      "description": null,
+      "page": 8,
+      "image_path": "./img/figure7.png"
+    },
+    {
+      "figure_id": 8,
+      "caption": "",
+      "classification": "other (0.95)",
+      "description": null,
+      "page": 9,
+      "image_path": "./img/figure8.png"
+    },
+    {
+      "figure_id": 9,
+      "caption": "",
+      "classification": "line_chart (1.00)",
+      "description": null,
+      "page": 10,
+      "image_path": "./img/figure9.png"
+    },
+    {
+      "figure_id": 10,
+      "caption": "(b) Average Transfer Size Timeline.",
+      "classification": "line_chart (0.99)",
+      "description": null,
+      "page": 10,
+      "image_path": "./img/figure10.png"
+    },
+    {
+      "figure_id": 11,
+      "caption": "(c) High-level Summary.",
+      "classification": "other (0.99)",
+      "description": null,
+      "page": 10,
+      "image_path": "./img/figure11.png"
+    },
+    {
+      "figure_id": 12,
+      "caption": "",
+      "classification": "line_chart (1.00)",
+      "description": null,
+      "page": 11,
+      "image_path": "./img/figure12.png"
+    },
+    {
+      "figure_id": 13,
+      "caption": "(b) Average Transfer Size Timeline.",
+      "classification": "line_chart (0.96)",
+      "description": null,
+      "page": 11,
+      "image_path": "./img/figure13.png"
+    },
+    {
+      "figure_id": 14,
+      "caption": "Figure 9: The Megatron Deepspeed workload uses large transfer sizes and achieves an aggregated bandwidth of 24GB/s.",
+      "classification": "other (0.98)",
+      "description": null,
+      "page": 11,
+      "image_path": "./img/figure14.png"
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+[
+  {
+    "figure_id": 1,
+    "caption": "",
+    "classification": "logo (0.98)",
+    "description": null,
+    "page": 1,
+    "image_path": "./img/figure1.png"
+  },
+  {
+    "figure_id": 2,
+    "caption": "",
+    "classification": "logo (0.96)",
+    "description": null,
+    "page": 1,
+    "image_path": "./img/figure2.png"
+  },
+  {
+    "figure_id": 3,
+    "caption": "Figure 1: DFTracer contains a unified interface exposed to multiple level events. These events are buffered into larger chunks, written to disk as JSON lines, and compressed. The DFAnalyzer loads the trace files, indexes them, and creates a Dask dataframe to extract insights from the workflow.",
+    "classification": "other (0.69)",
+    "description": null,
+    "page": 3,
+    "image_path": "./img/figure3.png"
+  },
+  {
+    "figure_id": 4,
+    "caption": "Figure 2: The DFAnalyzer efficiently reads all trace files in a parallel and pipelined manner.",
+    "classification": "other (0.61)",
+    "description": null,
+    "page": 5,
+    "image_path": "./img/figure4.png"
+  },
+  {
+    "figure_id": 5,
+    "caption": "Figure 3: The average runtime overhead as compared to baseline on C/C++ benchmark for DFTracer is 5-7%, Recorder is 16%, Score-P is 20%, and Darshan DXT is 21%.",
+    "classification": "bar_chart (1.00)",
+    "description": null,
+    "page": 7,
+    "image_path": "./img/figure5.png"
+  },
+  {
+    "figure_id": 6,
+    "caption": "",
+    "classification": "bar_chart (1.00)",
+    "description": null,
+    "page": 8,
+    "image_path": "./img/figure6.png"
+  },
+  {
+    "figure_id": 7,
+    "caption": "Figure 5: Loading trace data from DFTracer using DFAnalyzer is 3.3-3.7x faster than PyDarshan.",
+    "classification": "bar_chart (1.00)",
+    "description": null,
+    "page": 8,
+    "image_path": "./img/figure7.png"
+  },
+  {
+    "figure_id": 8,
+    "caption": "",
+    "classification": "other (0.95)",
+    "description": null,
+    "page": 9,
+    "image_path": "./img/figure8.png"
+  },
+  {
+    "figure_id": 9,
+    "caption": "",
+    "classification": "line_chart (1.00)",
+    "description": null,
+    "page": 10,
+    "image_path": "./img/figure9.png"
+  },
+  {
+    "figure_id": 10,
+    "caption": "(b) Average Transfer Size Timeline.",
+    "classification": "line_chart (0.99)",
+    "description": null,
+    "page": 10,
+    "image_path": "./img/figure10.png"
+  },
+  {
+    "figure_id": 11,
+    "caption": "(c) High-level Summary.",
+    "classification": "other (0.99)",
+    "description": null,
+    "page": 10,
+    "image_path": "./img/figure11.png"
+  },
+  {
+    "figure_id": 12,
+    "caption": "",
+    "classification": "line_chart (1.00)",
+    "description": null,
+    "page": 11,
+    "image_path": "./img/figure12.png"
+  },
+  {
+    "figure_id": 13,
+    "caption": "(b) Average Transfer Size Timeline.",
+    "classification": "line_chart (0.96)",
+    "description": null,
+    "page": 11,
+    "image_path": "./img/figure13.png"
+  },
+  {
+    "figure_id": 14,
+    "caption": "Figure 9: The Megatron Deepspeed workload uses large transfer sizes and achieves an aggregated bandwidth of 24GB/s.",
+    "classification": "other (0.98)",
+    "description": null,
+    "page": 11,
+    "image_path": "./img/figure14.png"
+  }
+]
