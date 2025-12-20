@@ -8,6 +8,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
 
+# Minimum dimensions to filter out logos/badges (in pixels)
+# Images smaller than this are likely logos, badges, or artifacts
+MIN_IMAGE_WIDTH = 200
+MIN_IMAGE_HEIGHT = 150
+# Minimum area threshold (width * height)
+MIN_IMAGE_AREA = 40000  # ~200x200
+
 
 class DoclingNotInstalledError(ImportError):
     """Raised when Docling is not installed."""
@@ -72,16 +79,28 @@ def extract_with_docling(
         error_msg = "; ".join(str(e) for e in errors) if errors else "Unknown error"
         raise RuntimeError(f"Docling conversion failed ({result.status}): {error_msg}")
 
-    # Extract and save images
+    # Extract and save images (filtering out small logos/badges)
     images: list[Path] = []
+    figure_num = 1  # Track actual figure numbers after filtering
     if hasattr(result.document, "pictures"):
-        for idx, picture in enumerate(result.document.pictures):
-            img_path = img_dir / f"figure{idx + 1}.png"
+        for picture in result.document.pictures:
             try:
                 pil_image: PILImage | None = picture.get_image(result.document)
                 if pil_image is not None:
+                    # Filter out small images (likely logos, badges, artifacts)
+                    width, height = pil_image.size
+                    area = width * height
+                    
+                    if (width < MIN_IMAGE_WIDTH or 
+                        height < MIN_IMAGE_HEIGHT or 
+                        area < MIN_IMAGE_AREA):
+                        # Skip small images - likely logos/badges
+                        continue
+                    
+                    img_path = img_dir / f"figure{figure_num}.png"
                     pil_image.save(str(img_path), "PNG")
                     images.append(img_path)
+                    figure_num += 1
             except Exception:
                 # Skip images that fail to extract
                 pass

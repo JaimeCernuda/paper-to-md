@@ -181,6 +181,9 @@ def postprocess(
     Run post-processing on an existing markdown file.
 
     Useful for re-processing or processing markdown from other sources.
+    
+    Note: Logo/badge filtering is done during extraction (pdf2md convert),
+    not during postprocessing. Existing extractions with logos will retain them.
     """
     from pdf2md.postprocess import process_markdown
 
