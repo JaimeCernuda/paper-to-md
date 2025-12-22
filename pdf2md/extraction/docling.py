@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
 
-# Minimum dimensions to filter out logos/badges (in pixels)
+# Default minimum dimensions to filter out logos/badges (in pixels)
 # Images smaller than this are likely logos, badges, or artifacts
-MIN_IMAGE_WIDTH = 200
-MIN_IMAGE_HEIGHT = 150
-# Minimum area threshold (width * height)
-MIN_IMAGE_AREA = 40000  # ~200x200
+DEFAULT_MIN_IMAGE_WIDTH = 200
+DEFAULT_MIN_IMAGE_HEIGHT = 150
+# Default minimum area threshold (width * height)
+DEFAULT_MIN_IMAGE_AREA = 40000  # ~200x200
 
 
 class DoclingNotInstalledError(ImportError):
@@ -32,6 +32,9 @@ def extract_with_docling(
     *,
     images_scale: float = 2.0,
     generate_pictures: bool = True,
+    min_image_width: int = DEFAULT_MIN_IMAGE_WIDTH,
+    min_image_height: int = DEFAULT_MIN_IMAGE_HEIGHT,
+    min_image_area: int = DEFAULT_MIN_IMAGE_AREA,
 ) -> tuple[Path, list[Path]]:
     """
     Extract markdown and images from a PDF using Docling.
@@ -41,6 +44,9 @@ def extract_with_docling(
         output_dir: Directory to save output (creates pdf_stem/ subdirectory)
         images_scale: Resolution multiplier for extracted images (default: 2.0)
         generate_pictures: Whether to extract figure images (default: True)
+        min_image_width: Minimum image width in pixels to keep (default: 200)
+        min_image_height: Minimum image height in pixels to keep (default: 150)
+        min_image_area: Minimum image area in pixels to keep (default: 40000)
 
     Returns:
         Tuple of (markdown_path, list_of_image_paths)
@@ -91,9 +97,9 @@ def extract_with_docling(
                     width, height = pil_image.size
                     area = width * height
                     
-                    if (width < MIN_IMAGE_WIDTH or 
-                        height < MIN_IMAGE_HEIGHT or 
-                        area < MIN_IMAGE_AREA):
+                    if (width < min_image_width or 
+                        height < min_image_height or 
+                        area < min_image_area):
                         # Skip small images - likely logos/badges
                         continue
                     
