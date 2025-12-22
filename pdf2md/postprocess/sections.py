@@ -2,9 +2,13 @@
 
 Handles hierarchical section numbering in academic papers:
 - Section: ## 1. INTRODUCTION or ## I. INTRODUCTION
-- Subsection: ### 1.1 Background or ### A. Background
+- Subsection: ### 1.1 Background
 - Subsubsection: #### 1.1.1 Details
-- Paragraph: ##### 1.1.1.1 Fine details or ##### A. Lettered items
+- Paragraph: ##### 1.1.1.1 Fine details
+
+Note: Lettered sections (A., B., etc.) are handled by the Claude agent
+in cleanup.py since they require context to distinguish from sentences
+starting with letters (e.g., "A. We conducted..." vs "A. Background").
 """
 
 from __future__ import annotations
@@ -24,8 +28,10 @@ def process_sections(content: str) -> str:
     - Abstract artifacts: "Abstract -Modern HPC..." → "## Abstract\\n\\nModern HPC..."
     - Index Terms: "Index Terms -keywords" → "## Index Terms\\n\\nkeywords"
     - Numbered sections: "3.1.1 Design overview." → "#### 3.1.1 Design overview"
-    - Lettered sections: "A. RAM management." → "##### A. RAM management"
     - Bullet subsections: "- 1) Title:" → "### 1) Title"
+
+    Note: Lettered sections (A., B.) are delegated to the Claude agent
+    for better context-aware detection.
 
     Args:
         content: Markdown content
@@ -36,8 +42,9 @@ def process_sections(content: str) -> str:
     content = _fix_abstract_header(content)
     content = _fix_index_terms_header(content)
     content = _fix_hierarchical_sections(content)
-    content = _fix_lettered_sections(content)
+    # Lettered sections removed - handled by agent (see cleanup.py)
     content = _fix_numbered_bullet_subsections(content)
+    return content
     return content
 
 
@@ -204,89 +211,6 @@ def _fix_hierarchical_sections(content: str) -> str:
                 result.append(body)  # Body text as new paragraph
                 i += 1
                 continue
-
-        result.append(line)
-        i += 1
-
-    return "\n".join(result)
-
-
-def _fix_lettered_sections(content: str) -> str:
-    """
-    Convert lettered section markers to proper markdown headers.
-
-    Patterns handled:
-    - "A. RAM management." → "##### A. RAM management"
-    - "B. Metadata management." → "##### B. Metadata management"
-    - "A. Title. Body text..." → "##### A. Title\\n\\nBody text..."
-
-    These typically appear as sub-items within numbered sections,
-    so they get a deeper header level (#####).
-    """
-    lines = content.split("\n")
-    result = []
-    i = 0
-
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-
-        # Skip if already a header
-        if stripped.startswith("#"):
-            result.append(line)
-            i += 1
-            continue
-
-        # Pattern 1: Single letter section on its own line
-        # "A. Title here." or "A. Title here:" or "A. Title here"
-        lettered_match = re.match(
-            r"^([A-Z])\.\s+([A-Z][^.]+?)(?:\.|\:)?\s*$",
-            stripped
-        )
-
-        if lettered_match:
-            letter = lettered_match.group(1)
-            title = lettered_match.group(2).strip()
-
-            # Get following lines for context
-            following = lines[i + 1 : i + 5] if i + 1 < len(lines) else []
-
-            # Check it's a title, not a sentence starting with "A. " meaning something else
-            if len(title) <= MAX_TITLE_LENGTH and _is_section_title(title, following):
-                # Check that it's followed by paragraph content
-                has_content = False
-                for fl in following:
-                    if fl.strip() and not re.match(r"^[A-Z]\.\s", fl.strip()):
-                        has_content = True
-                        break
-
-                if has_content:
-                    # Use level 5 for lettered sections (##### A. Title)
-                    result.append(f"##### {letter}. {title}")
-                    # Add blank line after header if not already there
-                    if i + 1 < len(lines) and lines[i + 1].strip():
-                        result.append("")
-                    i += 1
-                    continue
-
-        # Pattern 2: Lettered section with body on same line
-        # "A. RAM management. We have designed..." → split into header + body
-        inline_lettered_match = re.match(
-            r"^([A-Z])\.\s+([A-Z][^.]{2,50})(?:\.|\:)\s+(.+)$",
-            stripped
-        )
-
-        if inline_lettered_match:
-            letter = inline_lettered_match.group(1)
-            title = inline_lettered_match.group(2).strip()
-            body = inline_lettered_match.group(3).strip()
-
-            # Use level 5 for lettered sections
-            result.append(f"##### {letter}. {title}")
-            result.append("")  # Blank line after header
-            result.append(body)  # Body text as new paragraph
-            i += 1
-            continue
 
         result.append(line)
         i += 1

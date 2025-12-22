@@ -1,89 +1,13 @@
-"""Figure processing: embed images at their captions."""
+"""Figure processing: embed images at their captions.
+
+Note: Logo/badge filtering is now handled during extraction in docling.py
+using PIL to check image dimensions before saving. This ensures figures
+are numbered correctly from the start.
+"""
 
 from __future__ import annotations
 
 import re
-from pathlib import Path
-
-# Minimum dimensions to filter out logos/badges (in pixels)
-# Images smaller than this are likely logos, badges, or artifacts
-MIN_IMAGE_WIDTH = 200
-MIN_IMAGE_HEIGHT = 150
-MIN_IMAGE_AREA = 40000  # ~200x200
-
-
-def filter_logo_images(image_dir: Path) -> tuple[list[str], list[str]]:
-    """
-    Filter out small images that are likely logos/badges from an image directory.
-    
-    Args:
-        image_dir: Path to the img/ directory containing extracted images
-        
-    Returns:
-        Tuple of (valid_images, filtered_logos) - lists of filenames
-    """
-    try:
-        from PIL import Image
-    except ImportError:
-        # If PIL not available, return all images as valid
-        images = [f.name for f in image_dir.glob("*.png")]
-        return images, []
-    
-    valid_images: list[str] = []
-    filtered_logos: list[str] = []
-    
-    for img_path in sorted(image_dir.glob("*.png")):
-        try:
-            with Image.open(img_path) as img:
-                width, height = img.size
-                area = width * height
-                
-                if (width < MIN_IMAGE_WIDTH or 
-                    height < MIN_IMAGE_HEIGHT or 
-                    area < MIN_IMAGE_AREA):
-                    filtered_logos.append(img_path.name)
-                else:
-                    valid_images.append(img_path.name)
-        except Exception:
-            # If we can't read the image, include it to be safe
-            valid_images.append(img_path.name)
-    
-    return valid_images, filtered_logos
-
-
-def renumber_figures_after_filtering(
-    image_dir: Path,
-    valid_images: list[str],
-) -> dict[str, str]:
-    """
-    Renumber figure files after filtering out logos, so figures are sequential.
-    
-    Args:
-        image_dir: Path to the img/ directory
-        valid_images: List of valid image filenames (after filtering)
-        
-    Returns:
-        Mapping of old filename -> new filename
-    """
-    rename_map: dict[str, str] = {}
-    
-    # Sort by existing number to maintain order
-    def get_num(filename: str) -> int:
-        match = re.search(r"(\d+)", filename)
-        return int(match.group(1)) if match else 0
-    
-    sorted_images = sorted(valid_images, key=get_num)
-    
-    for new_num, old_name in enumerate(sorted_images, start=1):
-        new_name = f"figure{new_num}.png"
-        if old_name != new_name:
-            rename_map[old_name] = new_name
-            old_path = image_dir / old_name
-            new_path = image_dir / new_name
-            if old_path.exists() and not new_path.exists():
-                old_path.rename(new_path)
-    
-    return rename_map
 
 
 def process_figures(content: str, image_files: list[str]) -> str:
