@@ -1,9 +1,13 @@
-"""Figure processing: embed images at their captions."""
+"""Figure processing: embed images at their captions.
+
+Note: Logo/badge filtering is now handled during extraction in docling.py
+using PIL to check image dimensions before saving. This ensures figures
+are numbered correctly from the start.
+"""
 
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 
 def process_figures(content: str, image_files: list[str]) -> str:

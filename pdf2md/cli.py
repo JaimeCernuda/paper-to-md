@@ -60,6 +60,21 @@ def convert(
         "--images-scale",
         help="Image resolution multiplier (default: 2.0)",
     ),
+    min_image_width: int = typer.Option(
+        200,
+        "--min-image-width",
+        help="Minimum image width in pixels to keep (filters logos/badges)",
+    ),
+    min_image_height: int = typer.Option(
+        150,
+        "--min-image-height",
+        help="Minimum image height in pixels to keep (filters logos/badges)",
+    ),
+    min_image_area: int = typer.Option(
+        40000,
+        "--min-image-area",
+        help="Minimum image area (width*height) in pixels to keep",
+    ),
 ) -> None:
     """
     Convert an academic PDF paper to clean markdown.
@@ -92,6 +107,9 @@ def convert(
             pdf_path,
             output_dir,
             images_scale=images_scale,
+            min_image_width=min_image_width,
+            min_image_height=min_image_height,
+            min_image_area=min_image_area,
         )
     except DoclingNotInstalledError as e:
         console.print(f"[red]ERROR:[/red] {e}")
@@ -181,6 +199,9 @@ def postprocess(
     Run post-processing on an existing markdown file.
 
     Useful for re-processing or processing markdown from other sources.
+    
+    Note: Logo/badge filtering is done during extraction (pdf2md convert),
+    not during postprocessing. Existing extractions with logos will retain them.
     """
     from pdf2md.postprocess import process_markdown
 

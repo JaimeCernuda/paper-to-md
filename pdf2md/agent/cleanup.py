@@ -32,7 +32,43 @@ Review the markdown file and fix extraction artifacts. This is an open-ended tas
 
 ## Priority Tasks
 
-### 1. Relocate Misplaced Figures (Image + Caption Together)
+### 1. Fix Section Headers (IMPORTANT - Requires Context)
+
+The regex-based preprocessor handles numbered sections (1.1, 3.1.2, etc.) but CANNOT reliably detect:
+
+**Lettered sections** - These need YOUR judgment because they can be:
+- Real section headers: "A. Background" or "B. Related Work"
+- Regular sentences: "A. We conducted an experiment..." (NOT a header!)
+
+**How to identify lettered section headers:**
+1. Look for patterns like `A.`, `B.`, `C.` at line start followed by a short title
+2. They should be followed by paragraph content (not be part of a sentence)
+3. The "title" should be 1-4 words, typically capitalized
+4. They usually appear WITHIN numbered sections as sub-items
+
+**Examples to FIX (convert to headers):**
+```
+A. RAM management.                    → ##### A. RAM management
+B. Metadata management:               → ##### B. Metadata management  
+C. Data placement                     → ##### C. Data placement
+```
+
+**Examples to LEAVE ALONE (not headers):**
+```
+A. We conducted experiments on...     (This is a sentence starting with "A.")
+B. In our evaluation, we found...     (This is a continuation)
+```
+
+**Header level guidance:**
+- Lettered sections are typically sub-items, use level 5 (#####)
+- Or match the level of surrounding numbered sections + 1
+
+Also check for:
+- Roman numeral sections (I., II., III.) that weren't converted
+- Mixed numbering (1.A, 2.B) patterns
+- Sections with unusual formatting
+
+### 2. Relocate Misplaced Figures (Image + Caption Together)
 
 PDF extraction places figures where they appear in the LaTeX layout (often at page tops), NOT where they're referenced. A figure consists of THREE parts that must be moved TOGETHER:
 
@@ -75,7 +111,7 @@ Example AFTER:
 Text that says "as shown in Fig. 2"...
 ```
 
-### 2. Remove OCR Artifacts Above Captions
+### 3. Remove OCR Artifacts Above Captions
 
 Docling sometimes extracts garbage text from figure images via OCR. These appear as:
 - Short random text sequences (single words, fragments)
@@ -84,7 +120,7 @@ Docling sometimes extracts garbage text from figure images via OCR. These appear
 
 Remove these artifacts. The caption itself (starting with "Fig." or "Figure") should remain.
 
-### 3. Format Authors Section
+### 4. Format Authors Section
 
 Academic papers often have messy author formatting after PDF extraction. Create a clean **Authors** section right after the title.
 
@@ -113,7 +149,7 @@ Academic papers often have messy author formatting after PDF extraction. Create 
 - If institution is unclear, use what's available
 - Never invent information - only use what's actually in the document
 
-### 4. Merge Split Paragraphs
+### 5. Merge Split Paragraphs
 
 PDF extraction often splits paragraphs at page boundaries, creating awkward line breaks mid-sentence.
 
@@ -139,7 +175,7 @@ Data is written into the log in indivisible entries, rather than individual byte
 - If followed by blank line + continuation text, merge them into one paragraph
 - Be careful NOT to merge intentionally separate paragraphs or list items
 
-### 5. General Cleanup
+### 6. General Cleanup
 
 - Fix section headers not properly detected
 - Remove broken/garbled text
@@ -157,6 +193,7 @@ Data is written into the log in indivisible entries, rather than individual byte
 ## Output
 
 Edit the markdown file in place. When done, briefly summarize:
+- How many section headers were fixed (especially lettered sections like A., B.)
 - How many figures were relocated (with their captions)
 - What OCR artifacts were removed
 - How the authors section was formatted

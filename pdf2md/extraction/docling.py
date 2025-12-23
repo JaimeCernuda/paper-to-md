@@ -8,6 +8,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
 
+# Default minimum dimensions to filter out logos/badges (in pixels)
+# Images smaller than this are likely logos, badges, or artifacts
+DEFAULT_MIN_IMAGE_WIDTH = 200
+DEFAULT_MIN_IMAGE_HEIGHT = 150
+# Default minimum area threshold (width * height)
+DEFAULT_MIN_IMAGE_AREA = 40000  # ~200x200
+
 
 class DoclingNotInstalledError(ImportError):
     """Raised when Docling is not installed."""
@@ -25,6 +32,9 @@ def extract_with_docling(
     *,
     images_scale: float = 2.0,
     generate_pictures: bool = True,
+    min_image_width: int = DEFAULT_MIN_IMAGE_WIDTH,
+    min_image_height: int = DEFAULT_MIN_IMAGE_HEIGHT,
+    min_image_area: int = DEFAULT_MIN_IMAGE_AREA,
 ) -> tuple[Path, list[Path]]:
     """
     Extract markdown and images from a PDF using Docling.
@@ -34,6 +44,9 @@ def extract_with_docling(
         output_dir: Directory to save output (creates pdf_stem/ subdirectory)
         images_scale: Resolution multiplier for extracted images (default: 2.0)
         generate_pictures: Whether to extract figure images (default: True)
+        min_image_width: Minimum image width in pixels to keep (default: 200)
+        min_image_height: Minimum image height in pixels to keep (default: 150)
+        min_image_area: Minimum image area in pixels to keep (default: 40000)
 
     Returns:
         Tuple of (markdown_path, list_of_image_paths)
@@ -72,16 +85,28 @@ def extract_with_docling(
         error_msg = "; ".join(str(e) for e in errors) if errors else "Unknown error"
         raise RuntimeError(f"Docling conversion failed ({result.status}): {error_msg}")
 
-    # Extract and save images
+    # Extract and save images (filtering out small logos/badges)
     images: list[Path] = []
+    figure_num = 1  # Track actual figure numbers after filtering
     if hasattr(result.document, "pictures"):
-        for idx, picture in enumerate(result.document.pictures):
-            img_path = img_dir / f"figure{idx + 1}.png"
+        for picture in result.document.pictures:
             try:
                 pil_image: PILImage | None = picture.get_image(result.document)
                 if pil_image is not None:
+                    # Filter out small images (likely logos, badges, artifacts)
+                    width, height = pil_image.size
+                    area = width * height
+                    
+                    if (width < min_image_width or 
+                        height < min_image_height or 
+                        area < min_image_area):
+                        # Skip small images - likely logos/badges
+                        continue
+                    
+                    img_path = img_dir / f"figure{figure_num}.png"
                     pil_image.save(str(img_path), "PNG")
                     images.append(img_path)
+                    figure_num += 1
             except Exception:
                 # Skip images that fail to extract
                 pass
