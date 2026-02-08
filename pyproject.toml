@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pdf2md"
 version = "0.2.0"
-description = "Convert academic PDF papers to clean markdown using Docling + Claude cleanup"
+description = "Convert academic PDF papers to clean markdown using Docling + AI cleanup"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = "MIT"
@@ -35,12 +35,24 @@ dependencies = [
 docling = [
     "docling>=2.0.0",
 ]
+# Claude Agent SDK (cloud)
 agent = [
     "claude-agent-sdk>=0.1.14",
 ]
+# Local LLM backend (LM Studio, Ollama)
+agent-local = [
+    "litellm>=1.50.0",
+]
+# All agent backends
+all-agents = [
+    "claude-agent-sdk>=0.1.14",
+    "litellm>=1.50.0",
+]
+# Full installation
 all = [
     "docling>=2.0.0",
     "claude-agent-sdk>=0.1.14",
+    "litellm>=1.50.0",
 ]
 dev = [
     "pytest>=8.0.0",
@@ -63,6 +75,10 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# CLEANUP_PROMPT is a long prompt string - line length is intentional for readability
+"pdf2md/agent/cleanup.py" = ["E501"]
 
 # Note: ROCm PyTorch is Linux-only. On Windows, Docling's internal models
 # run on CPU, while VLM descriptions go through Ollama API which uses

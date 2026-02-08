@@ -56,9 +56,9 @@ def extract_with_docling(
         RuntimeError: If conversion fails
     """
     try:
-        from docling.document_converter import DocumentConverter, PdfFormatOption
-        from docling.datamodel.pipeline_options import PdfPipelineOptions
         from docling.datamodel.base_models import ConversionStatus, InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.document_converter import DocumentConverter, PdfFormatOption
     except ImportError as e:
         raise DoclingNotInstalledError() from e
 
@@ -74,9 +74,7 @@ def extract_with_docling(
     pipeline_options.generate_picture_images = generate_pictures
 
     converter = DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-        }
+        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
     )
     result = converter.convert(str(pdf_path))
 
@@ -96,13 +94,15 @@ def extract_with_docling(
                     # Filter out small images (likely logos, badges, artifacts)
                     width, height = pil_image.size
                     area = width * height
-                    
-                    if (width < min_image_width or 
-                        height < min_image_height or 
-                        area < min_image_area):
+
+                    if (
+                        width < min_image_width
+                        or height < min_image_height
+                        or area < min_image_area
+                    ):
                         # Skip small images - likely logos/badges
                         continue
-                    
+
                     img_path = img_dir / f"figure{figure_num}.png"
                     pil_image.save(str(img_path), "PNG")
                     images.append(img_path)

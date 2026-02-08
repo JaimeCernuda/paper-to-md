@@ -29,9 +29,7 @@ def find_kougkas_papers(folder_path: Path) -> list[dict]:
 
             # Check if Kougkas is an author (case-insensitive)
             authors = data.get("authors", [])
-            is_kougkas_paper = any(
-                "kougkas" in author.lower() for author in authors
-            )
+            is_kougkas_paper = any("kougkas" in author.lower() for author in authors)
 
             if not is_kougkas_paper:
                 continue
@@ -141,20 +139,15 @@ def download_files(papers: list[dict], output_path: Path) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Download IOWarp/Kougkas publications"
-    )
+    parser = argparse.ArgumentParser(description="Download IOWarp/Kougkas publications")
     parser.add_argument(
-        "--folder",
-        type=Path,
-        required=True,
-        help="Path to the publications YAML folder"
+        "--folder", type=Path, required=True, help="Path to the publications YAML folder"
     )
     parser.add_argument(
         "--output",
         type=Path,
         default=None,
-        help="Output directory (default: <folder>/../downloads)"
+        help="Output directory (default: <folder>/../downloads)",
     )
 
     args = parser.parse_args()

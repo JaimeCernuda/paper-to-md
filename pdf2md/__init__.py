@@ -2,9 +2,9 @@
 
 __version__ = "0.2.0"
 
+from pdf2md.agent.cleanup import run_cleanup_agent
 from pdf2md.extraction.docling import extract_with_docling
 from pdf2md.postprocess import process_markdown
-from pdf2md.agent.cleanup import run_cleanup_agent
 
 __all__ = [
     "extract_with_docling",

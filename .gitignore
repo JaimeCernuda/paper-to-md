@@ -41,3 +41,13 @@ rag/
 # OS
 .DS_Store
 Thumbs.db
+
+# Development/testing artifacts
+PLAN.md
+papers/
+test_output/
+test_output_high/
+papers-to-convert/
+*.pdf
+AGENTS.md
+CODEX.md

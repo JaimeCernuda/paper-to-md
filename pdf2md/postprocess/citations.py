@@ -63,6 +63,8 @@ def _expand_citation_ranges(content: str) -> str:
         end = int(match.group(2))
         if start > end:
             start, end = end, start
+        if end - start > 50:
+            return match.group(0)
         citations = [f"[{i}]" for i in range(start, end + 1)]
         return ", ".join(citations)
 
@@ -83,12 +85,14 @@ def _link_single_citations(content: str) -> str:
         prefix = match.string[max(0, match.start() - 2) : match.start()]
         if prefix.endswith("](") or prefix.endswith("!["):
             return match.group(0)
+        # Already linked: [[N]](#ref-N) — the outer [ precedes our match
+        if prefix.endswith("["):
+            return match.group(0)
 
         num = match.group(1)
         return f"[[{num}]](#ref-{num})"
 
-    # Match [N] where N is 1-3 digits, not preceded by ] or !
-    # Negative lookbehind to avoid matching inside links
+    # Match [N] where N is 1-3 digits, not preceded by ] or followed by (
     pattern = r"(?<!\])\[(\d{1,3})\](?!\()"
     return re.sub(pattern, link_citation, content)
 
@@ -104,14 +108,15 @@ def _add_reference_anchors(references: str) -> str:
     # "- [1]" → "[1]"
     references = re.sub(r"^-\s*\[(\d{1,3})\]", r"[\1]", references, flags=re.MULTILINE)
 
-    def add_anchor(match: re.Match) -> str:
-        num = match.group(1)
+    # Match [N] at start of line, allowing leading whitespace (indented refs)
+    pattern = r"^(\s*)\[(\d{1,3})\]"
+
+    def add_anchor_with_indent(match: re.Match) -> str:
+        indent = match.group(1)
+        num = match.group(2)
         full_match = match.group(0)
-        # Don't add anchor if already present
         if f'id="ref-{num}"' in match.string[max(0, match.start() - 50) : match.start()]:
             return full_match
-        return f'<a id="ref-{num}"></a>{full_match}'
+        return f'{indent}<a id="ref-{num}"></a>[{num}]'
 
-    # Match [N] at start of line (reference entry)
-    pattern = r"^\[(\d{1,3})\]"
-    return re.sub(pattern, add_anchor, references, flags=re.MULTILINE)
+    return re.sub(pattern, add_anchor_with_indent, references, flags=re.MULTILINE)

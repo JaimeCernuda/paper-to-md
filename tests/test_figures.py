@@ -1,11 +1,10 @@
 """Unit tests for figures.py postprocessing."""
 
-import pytest
 from pdf2md.postprocess.figures import (
-    process_figures,
     _build_figure_map,
     _embed_figures_at_captions,
     find_unembedded_figures,
+    process_figures,
 )
 
 
@@ -55,7 +54,7 @@ class TestEmbedFiguresAtCaptions:
         content = "Some text.\n\nFig. 1. A sample figure caption.\n\nMore text."
         figure_map = {1: "figure1.png"}
         result = _embed_figures_at_captions(content, figure_map)
-        
+
         assert "![Figure 1](./img/figure1.png)" in result
         # Image should come before caption
         img_pos = result.find("![Figure 1]")
@@ -119,7 +118,7 @@ Conclusion text.
 """
         image_files = ["figure1.png", "figure2.png"]
         result = process_figures(content, image_files)
-        
+
         assert "![Figure 1](./img/figure1.png)" in result
         assert "![Figure 2](./img/figure2.png)" in result
 
@@ -151,22 +150,95 @@ class TestFindUnembeddedFigures:
         assert len(result) == 2
 
 
+class TestLineStartOnlyDetection:
+    """Tests that figure embedding only triggers on line-start captions."""
+
+    def test_mid_sentence_not_embedded(self):
+        """'As shown in Fig. 1...' should NOT trigger embedding."""
+        content = "As shown in Fig. 1, the results are clear.\n\nMore text."
+        figure_map = {1: "figure1.png"}
+        result = _embed_figures_at_captions(content, figure_map)
+        assert "![Figure 1]" not in result
+
+    def test_see_fig_not_embedded(self):
+        """'see Fig. 2' mid-sentence should NOT trigger embedding."""
+        content = "We see Fig. 2 in the next section.\n\nMore text."
+        figure_map = {2: "figure2.png"}
+        result = _embed_figures_at_captions(content, figure_map)
+        assert "![Figure 2]" not in result
+
+    def test_line_start_fig_embedded(self):
+        """'Fig. 1. Caption' at line start SHOULD trigger embedding."""
+        content = "Some text.\n\nFig. 1. Caption text here.\n\nMore text."
+        figure_map = {1: "figure1.png"}
+        result = _embed_figures_at_captions(content, figure_map)
+        assert "![Figure 1](./img/figure1.png)" in result
+
+    def test_indented_caption_embedded(self):
+        """'  Fig. 1. Caption' with leading spaces should still embed."""
+        content = "Text.\n\n  Fig. 1. Caption text.\n\nMore."
+        figure_map = {1: "figure1.png"}
+        result = _embed_figures_at_captions(content, figure_map)
+        assert "![Figure 1](./img/figure1.png)" in result
+
+    def test_bold_caption_embedded(self):
+        """'**Fig. 1.** Caption' should embed."""
+        content = "Text.\n\n**Fig. 1.** Caption text.\n\nMore."
+        figure_map = {1: "figure1.png"}
+        result = _embed_figures_at_captions(content, figure_map)
+        assert "![Figure 1](./img/figure1.png)" in result
+
+    def test_figure_colon_caption(self):
+        """'Figure 1: Caption' at line start should embed."""
+        content = "Text.\n\nFigure 1: Some description.\n\nMore."
+        figure_map = {1: "figure1.png"}
+        result = _embed_figures_at_captions(content, figure_map)
+        assert "![Figure 1](./img/figure1.png)" in result
+
+    def test_each_figure_embedded_once(self):
+        """Figure appears in caption twice, only embedded at first."""
+        content = "Fig. 1. First caption.\n\nText.\n\nFig. 1. Repeated.\n"
+        figure_map = {1: "figure1.png"}
+        result = _embed_figures_at_captions(content, figure_map)
+        assert result.count("![Figure 1]") == 1
+
+    def test_idempotent_no_duplicate_on_reprocess(self):
+        """Already-embedded figure should not be embedded again on reprocessing."""
+        content = (
+            "Some text.\n\n![Figure 1](./img/figure1.png)\n\nFig. 1. Caption here.\n\nMore text."
+        )
+        figure_map = {1: "figure1.png"}
+        result = _embed_figures_at_captions(content, figure_map)
+        assert result.count("![Figure 1]") == 1
+
+    def test_process_figures_idempotent(self):
+        """Running process_figures twice produces identical output."""
+        content = "Some text.\n\nFig. 1. Caption.\n\nMore text."
+        images = ["figure1.png"]
+        first = process_figures(content, images)
+        second = process_figures(first, images)
+        assert first == second
+
+
 class TestNoDeadCode:
     """Verify dead code was removed from figures.py."""
 
     def test_no_filter_logo_images_function(self):
         """filter_logo_images should not exist in module."""
         from pdf2md.postprocess import figures
-        assert not hasattr(figures, 'filter_logo_images')
+
+        assert not hasattr(figures, "filter_logo_images")
 
     def test_no_renumber_figures_function(self):
         """renumber_figures_after_filtering should not exist in module."""
         from pdf2md.postprocess import figures
-        assert not hasattr(figures, 'renumber_figures_after_filtering')
+
+        assert not hasattr(figures, "renumber_figures_after_filtering")
 
     def test_no_min_image_constants(self):
         """MIN_IMAGE_WIDTH etc constants should not exist in module."""
         from pdf2md.postprocess import figures
-        assert not hasattr(figures, 'MIN_IMAGE_WIDTH')
-        assert not hasattr(figures, 'MIN_IMAGE_HEIGHT')
-        assert not hasattr(figures, 'MIN_IMAGE_AREA')
+
+        assert not hasattr(figures, "MIN_IMAGE_WIDTH")
+        assert not hasattr(figures, "MIN_IMAGE_HEIGHT")
+        assert not hasattr(figures, "MIN_IMAGE_AREA")

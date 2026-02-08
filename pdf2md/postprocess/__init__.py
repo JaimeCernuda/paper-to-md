@@ -1,10 +1,10 @@
 """Deterministic post-processing for extracted markdown."""
 
-from pdf2md.postprocess.citations import process_citations
-from pdf2md.postprocess.sections import process_sections
-from pdf2md.postprocess.figures import process_figures
 from pdf2md.postprocess.bibliography import process_bibliography
+from pdf2md.postprocess.citations import process_citations
 from pdf2md.postprocess.cleanup import cleanup_text
+from pdf2md.postprocess.figures import process_figures
+from pdf2md.postprocess.sections import process_sections
 
 
 def process_markdown(content: str, images: list[str] | None = None) -> str:

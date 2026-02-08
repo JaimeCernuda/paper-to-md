@@ -1,13 +1,9 @@
-"""Claude agent for open-ended markdown cleanup."""
+"""Agent for open-ended markdown cleanup."""
 
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
 
 
 class AgentNotInstalledError(ImportError):
@@ -49,7 +45,7 @@ The regex-based preprocessor handles numbered sections (1.1, 3.1.2, etc.) but CA
 **Examples to FIX (convert to headers):**
 ```
 A. RAM management.                    → ##### A. RAM management
-B. Metadata management:               → ##### B. Metadata management  
+B. Metadata management:               → ##### B. Metadata management
 C. Data placement                     → ##### C. Data placement
 ```
 
@@ -223,7 +219,7 @@ async def run_cleanup_agent(
         AgentNotInstalledError: If Claude Agent SDK is not installed
     """
     try:
-        from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+        from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
     except ImportError as e:
         raise AgentNotInstalledError() from e
 
@@ -278,3 +274,72 @@ def run_cleanup_agent_sync(
         Agent's summary of changes, or None if agent failed
     """
     return asyncio.run(run_cleanup_agent(md_path, img_dir, verbose=verbose))
+
+
+async def run_cleanup_with_backend(
+    md_path: Path,
+    img_dir: Path | None = None,
+    *,
+    backend: str = "claude",
+    provider: str | None = None,
+    model: str | None = None,
+    verbose: bool = False,
+) -> str | None:
+    """Run cleanup using the specified backend.
+
+    Args:
+        md_path: Path to markdown file to clean
+        img_dir: Path to images directory (optional)
+        backend: Agent backend to use ('claude' or 'local')
+        provider: LLM provider (local backend: lm_studio, ollama)
+        model: Model name (backend/provider-specific)
+        verbose: Print progress
+
+    Returns:
+        Summary of changes, or None if failed
+    """
+    from .backends import get_backend
+
+    agent_backend = get_backend(backend)
+    return await agent_backend.run_cleanup(
+        md_path,
+        img_dir,
+        provider=provider,
+        model=model,
+        verbose=verbose,
+    )
+
+
+def run_cleanup_with_backend_sync(
+    md_path: Path,
+    img_dir: Path | None = None,
+    *,
+    backend: str = "claude",
+    provider: str | None = None,
+    model: str | None = None,
+    verbose: bool = False,
+) -> str | None:
+    """Synchronous wrapper for run_cleanup_with_backend.
+
+    Safe to call from both sync contexts and inside running event loops
+    (e.g. Jupyter notebooks, async web servers).
+    """
+    coro = run_cleanup_with_backend(
+        md_path,
+        img_dir,
+        backend=backend,
+        provider=provider,
+        model=model,
+        verbose=verbose,
+    )
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop — use asyncio.run() (normal CLI path)
+        return asyncio.run(coro)
+
+    # Already inside a running loop (notebook / async server)
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()

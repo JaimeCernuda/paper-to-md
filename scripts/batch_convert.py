@@ -5,7 +5,7 @@ Usage:
     uv run python scripts/batch_convert.py INPUT_FOLDER OUTPUT_FOLDER [OPTIONS]
 
 Example:
-    uv run python scripts/batch_convert.py grc-context/downloads/pdfs grc_parsed_pdfs --agent --describe
+    uv run python scripts/batch_convert.py papers/ output/ --depth high --local
 """
 
 from __future__ import annotations
@@ -28,10 +28,11 @@ def convert_pdf(
     output_dir: Path,
     log_file: Path | None = None,
     *,
+    depth: str = "medium",
+    local: bool = False,
+    provider: str | None = None,
+    model: str | None = None,
     keep_raw: bool = True,
-    enrich: bool = True,
-    describe: bool = True,
-    agent: bool = True,
 ) -> tuple[bool, float, str]:
     """
     Convert a single PDF using pdf2md CLI.
@@ -40,30 +41,29 @@ def convert_pdf(
         Tuple of (success: bool, duration_seconds: float, output: str)
     """
     cmd = ["uv", "run", "pdf2md", "convert", str(pdf_path), str(output_dir)]
+    cmd.extend(["--depth", depth])
 
     if keep_raw:
         cmd.append("--keep-raw")
-    if enrich:
-        cmd.append("--enrich")
-    if describe:
-        cmd.append("--describe")
-    if agent:
-        cmd.append("--agent")
+    if local:
+        cmd.append("--local")
+    if provider:
+        cmd.extend(["--provider", provider])
+    if model:
+        cmd.extend(["--model", model])
 
     start_time = time.time()
     start_timestamp = datetime.now().isoformat()
 
-    # Write log header immediately so we know it started
     if log_file:
         with open(log_file, "w", encoding="utf-8") as f:
             f.write(f"# PDF Conversion Log: {pdf_path.name}\n")
             f.write(f"# Started: {start_timestamp}\n")
             f.write(f"# Command: {' '.join(cmd)}\n")
-            f.write(f"# Status: IN PROGRESS...\n")
+            f.write("# Status: IN PROGRESS...\n")
             f.write("=" * 60 + "\n\n")
 
     try:
-        # Stream output to log file in real-time
         if log_file:
             with open(log_file, "a", encoding="utf-8") as f:
                 result = subprocess.run(
@@ -81,7 +81,6 @@ def convert_pdf(
 
         duration = time.time() - start_time
 
-        # Append completion info to log
         if log_file:
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write("\n\n" + "=" * 60 + "\n")
@@ -114,6 +113,7 @@ def write_summary_log(
     """Write a summary log of the batch conversion."""
     successful = sum(1 for _, success, _ in results if success)
     failed = len(results) - successful
+    avg_time = total_duration / len(results) if results else 0
 
     with open(log_file, "w", encoding="utf-8") as f:
         f.write("=" * 60 + "\n")
@@ -126,16 +126,16 @@ def write_summary_log(
         f.write(f"Total PDFs: {len(results)}\n")
         f.write(f"Successful: {successful}\n")
         f.write(f"Failed:     {failed}\n")
-        f.write(f"Duration:   {total_duration/60:.1f} minutes ({total_duration:.1f}s)\n")
-        f.write(f"Average:    {total_duration/len(results):.1f}s per PDF\n\n")
+        f.write(f"Duration:   {total_duration / 60:.1f} minutes ({total_duration:.1f}s)\n")
+        f.write(f"Average:    {avg_time:.1f}s per PDF\n\n")
 
         f.write("Options:\n")
-        f.write(f"  - Keep raw:      {not args.no_raw}\n")
-        f.write(f"  - Enrich:        {not args.no_enrich}\n")
-        f.write(f"  - VLM describe:  {not args.no_describe}\n")
-        f.write(f"  - Agent cleanup: {not args.no_agent}\n\n")
+        f.write(f"  - Depth:    {args.depth}\n")
+        f.write(f"  - Local:    {args.local}\n")
+        f.write(f"  - Provider: {args.provider or 'default'}\n")
+        f.write(f"  - Model:    {args.model or 'default'}\n")
+        f.write(f"  - Keep raw: {not args.no_raw}\n\n")
 
-        # Results table
         f.write("-" * 60 + "\n")
         f.write("RESULTS BY PDF\n")
         f.write("-" * 60 + "\n\n")
@@ -161,29 +161,17 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Convert all PDFs with full processing (VLM descriptions + agent cleanup)
-  uv run python scripts/batch_convert.py grc-context/downloads/pdfs grc_parsed_pdfs
+  # Convert all PDFs with default settings (medium depth, cloud backend)
+  uv run python scripts/batch_convert.py papers/ output/
 
-  # Fast conversion without VLM descriptions or agent cleanup
-  uv run python scripts/batch_convert.py input_pdfs output_md --no-describe --no-agent
+  # Fast conversion (no AI)
+  uv run python scripts/batch_convert.py papers/ output/ --depth low
+
+  # Full processing with local LLM
+  uv run python scripts/batch_convert.py papers/ output/ --depth high --local
 
   # Skip first 5 PDFs (useful for resuming after failure)
-  uv run python scripts/batch_convert.py input_pdfs output_md --skip 5
-
-Output structure:
-  OUTPUT_DIR/
-  ├── logs/                    # Individual conversion logs
-  │   ├── paper-name-1.log
-  │   ├── paper-name-2.log
-  │   └── ...
-  ├── batch_summary.log        # Overall summary with success/fail
-  ├── paper-name-1/            # Converted paper 1
-  │   ├── paper-name-1.md
-  │   ├── paper-name-1_raw.md
-  │   ├── enrichments.json
-  │   └── img/
-  └── paper-name-2/            # Converted paper 2
-      └── ...
+  uv run python scripts/batch_convert.py papers/ output/ --skip 5
         """,
     )
     parser.add_argument(
@@ -194,27 +182,33 @@ Output structure:
     parser.add_argument(
         "output_dir",
         type=Path,
-        help="Directory to output converted markdown (all PDFs bundled here)",
+        help="Directory to output converted markdown",
+    )
+    parser.add_argument(
+        "--depth",
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="Analysis depth: low (fast), medium (balanced), high (thorough)",
+    )
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Use local LLM/VLM instead of cloud (Claude)",
+    )
+    parser.add_argument(
+        "--provider",
+        default=None,
+        help="LLM provider: lm_studio (default), ollama",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Override LLM/VLM model name",
     )
     parser.add_argument(
         "--no-raw",
         action="store_true",
-        help="Don't keep raw markdown (before agent cleanup)",
-    )
-    parser.add_argument(
-        "--no-enrich",
-        action="store_true",
-        help="Don't extract enrichments (code, equations, figures)",
-    )
-    parser.add_argument(
-        "--no-describe",
-        action="store_true",
-        help="Don't generate VLM descriptions for figures (faster)",
-    )
-    parser.add_argument(
-        "--no-agent",
-        action="store_true",
-        help="Don't run Claude agent cleanup (faster)",
+        help="Don't keep raw markdown",
     )
     parser.add_argument(
         "--skip",
@@ -236,7 +230,6 @@ Output structure:
 
     args = parser.parse_args()
 
-    # Validate input directory
     if not args.input_dir.exists():
         print(f"Error: Input directory does not exist: {args.input_dir}")
         return 1
@@ -245,34 +238,36 @@ Output structure:
         print(f"Error: Input path is not a directory: {args.input_dir}")
         return 1
 
-    # Get PDF files
     pdf_files = get_pdf_files(args.input_dir)
 
     if not pdf_files:
         print(f"No PDF files found in {args.input_dir}")
         return 1
 
-    # Apply skip and limit
     if args.skip > 0:
-        pdf_files = pdf_files[args.skip:]
+        pdf_files = pdf_files[args.skip :]
     if args.limit is not None:
-        pdf_files = pdf_files[:args.limit]
+        pdf_files = pdf_files[: args.limit]
+
+    if not pdf_files:
+        print("No PDF files to process after applying --skip/--limit")
+        return 0
 
     total_pdfs = len(pdf_files)
 
+    backend_str = f"local ({args.provider or 'lm_studio'})" if args.local else "cloud (Claude)"
     print(f"{'=' * 60}")
-    print(f"PDF Batch Conversion")
+    print("PDF Batch Conversion")
     print(f"{'=' * 60}")
-    print(f"Input:  {args.input_dir.absolute()}")
-    print(f"Output: {args.output_dir.absolute()}")
-    print(f"PDFs:   {total_pdfs} files")
-    print(f"Options:")
-    print(f"  - Keep raw:    {not args.no_raw}")
-    print(f"  - Enrich:      {not args.no_enrich}")
-    print(f"  - VLM describe:{not args.no_describe}")
-    print(f"  - Agent cleanup:{not args.no_agent}")
+    print(f"Input:   {args.input_dir.absolute()}")
+    print(f"Output:  {args.output_dir.absolute()}")
+    print(f"PDFs:    {total_pdfs} files")
+    print(f"Depth:   {args.depth}")
+    print(f"Backend: {backend_str}")
+    if args.model:
+        print(f"Model:   {args.model}")
     if args.skip > 0:
-        print(f"  - Skipping first {args.skip} PDFs")
+        print(f"Skipped: first {args.skip} PDFs")
     print(f"{'=' * 60}")
 
     if args.dry_run:
@@ -281,7 +276,6 @@ Output structure:
             print(f"  {i:3d}. {pdf.name}")
         return 0
 
-    # Create output and logs directories
     args.output_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = args.output_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -289,7 +283,6 @@ Output structure:
     print(f"\nLogs directory: {logs_dir.absolute()}")
     print(f"Summary log:    {args.output_dir.absolute() / 'batch_summary.log'}")
 
-    # Track results
     results: list[tuple[str, bool, float]] = []
     total_start = time.time()
 
@@ -298,17 +291,17 @@ Output structure:
         print(f"    Log: logs/{pdf_path.stem}.log")
         print("-" * 60)
 
-        # Individual log file for this PDF
         log_file = logs_dir / f"{pdf_path.stem}.log"
 
         success, duration, output = convert_pdf(
             pdf_path,
             args.output_dir,
             log_file=log_file,
+            depth=args.depth,
+            local=args.local,
+            provider=args.provider,
+            model=args.model,
             keep_raw=not args.no_raw,
-            enrich=not args.no_enrich,
-            describe=not args.no_describe,
-            agent=not args.no_agent,
         )
 
         results.append((pdf_path.name, success, duration))
@@ -316,7 +309,6 @@ Output structure:
         status = "SUCCESS" if success else "FAILED"
         print(f"\n[{i}/{total_pdfs}] {status} in {duration:.1f}s: {pdf_path.name}")
 
-        # Update summary log after each PDF (for monitoring progress)
         total_duration_so_far = time.time() - total_start
         write_summary_log(
             args.output_dir / "batch_summary.log",
@@ -325,12 +317,11 @@ Output structure:
             args,
         )
 
-    # Final summary
     total_duration = time.time() - total_start
     successful = sum(1 for _, success, _ in results if success)
     failed = total_pdfs - successful
+    avg_time = total_duration / total_pdfs if total_pdfs else 0
 
-    # Write final summary log
     write_summary_log(
         args.output_dir / "batch_summary.log",
         results,
@@ -344,14 +335,14 @@ Output structure:
     print(f"Total:      {total_pdfs} PDFs")
     print(f"Successful: {successful}")
     print(f"Failed:     {failed}")
-    print(f"Duration:   {total_duration/60:.1f} minutes ({total_duration:.1f}s)")
-    print(f"Average:    {total_duration/total_pdfs:.1f}s per PDF")
+    print(f"Duration:   {total_duration / 60:.1f} minutes ({total_duration:.1f}s)")
+    print(f"Average:    {avg_time:.1f}s per PDF")
     print(f"Output:     {args.output_dir.absolute()}")
     print(f"Summary:    {args.output_dir.absolute() / 'batch_summary.log'}")
     print(f"Logs:       {logs_dir.absolute()}")
 
     if failed > 0:
-        print(f"\nFailed PDFs (see individual logs for details):")
+        print("\nFailed PDFs (see individual logs for details):")
         for name, success, _ in results:
             if not success:
                 print(f"  - {name}")
