@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import re
 
-
 # Maximum title length for a section header (longer text is likely a paragraph)
 MAX_TITLE_LENGTH = 120
 
@@ -44,7 +43,6 @@ def process_sections(content: str) -> str:
     content = _fix_hierarchical_sections(content)
     # Lettered sections removed - handled by agent (see cleanup.py)
     content = _fix_numbered_bullet_subsections(content)
-    return content
     return content
 
 
@@ -91,7 +89,7 @@ def _determine_header_level(numbering: str) -> int:
     # Count the number of parts separated by dots
     parts = numbering.split(".")
     depth = len(parts)
-    
+
     # Map depth to header level (depth 1 = ##, depth 2 = ###, etc.)
     # Cap at level 6 (######) which is the max in markdown
     return min(depth + 1, 6)
@@ -167,10 +165,7 @@ def _fix_hierarchical_sections(content: str) -> str:
 
         # Pattern 1: N.N.N Title on its own line (title ends with period or nothing)
         # e.g., "3.1.1 Design overview." or "3.1.1 Design overview"
-        section_match = re.match(
-            r"^(\d+(?:\.\d+)+)\s+([A-Z][^.]+?)\.?\s*$",
-            stripped
-        )
+        section_match = re.match(r"^(\d+(?:\.\d+)+)\s+([A-Z][^.]+?)\.?\s*$", stripped)
 
         if section_match:
             numbering = section_match.group(1)
@@ -192,10 +187,7 @@ def _fix_hierarchical_sections(content: str) -> str:
         # Pattern 2: N.N.N Title. Body text on same line
         # e.g., "3.1.1 Design overview. Hermes is designed as a middleware..."
         # Split into header and body paragraph
-        inline_match = re.match(
-            r"^(\d+(?:\.\d+)+)\s+([A-Z][^.]{2,50})\.\s+(.+)$",
-            stripped
-        )
+        inline_match = re.match(r"^(\d+(?:\.\d+)+)\s+([A-Z][^.]{2,50})\.\s+(.+)$", stripped)
 
         if inline_match:
             numbering = inline_match.group(1)
@@ -248,8 +240,10 @@ def _fix_numbered_bullet_subsections(content: str) -> str:
             if j < len(lines):
                 next_line = lines[j].strip()
                 # Check it's not another list item
-                if next_line and not re.match(r"^[-*•]\s", next_line) and not re.match(
-                    r"^\d+[).]\s", next_line
+                if (
+                    next_line
+                    and not re.match(r"^[-*•]\s", next_line)
+                    and not re.match(r"^\d+[).]\s", next_line)
                 ):
                     has_following_paragraphs = True
 

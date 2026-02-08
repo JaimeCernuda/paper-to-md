@@ -16,12 +16,25 @@ Convert academic PDF papers to clean, readable markdown with linked citations, e
 # Install with uv
 uv sync --all-extras
 
-# Basic conversion
+# Basic conversion (medium depth — Docling + postprocess + LLM retouch)
 uv run pdf2md convert paper.pdf ./output
 
-# Full pipeline (recommended)
-uv run pdf2md convert paper.pdf ./output --keep-raw --enrich --agent
+# Fast conversion (no AI)
+uv run pdf2md convert paper.pdf ./output -d low
+
+# Full pipeline with local LLM
+uv run pdf2md convert paper.pdf ./output -d high --local
 ```
+
+## Depth Levels
+
+pdf2md uses a depth-based system to control how much processing is applied:
+
+| Depth | What happens | Speed |
+|-------|-------------|-------|
+| `low` | Docling extraction + rule-based postprocessing (citations, figures, sections, cleanup) | Fast, no AI |
+| `medium` | + LLM retouch (author formatting, lettered section detection) | Moderate |
+| `high` | + VLM figure descriptions + code/equation enrichments | Slow |
 
 ## Commands
 
@@ -33,12 +46,16 @@ uv run pdf2md convert paper.pdf ./output [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--keep-raw` | Save the raw Docling extraction alongside processed output |
-| `--enrich` | Extract metadata (captions, classifications) for RAG |
-| `--describe` | Generate VLM descriptions for figures (slow, requires --enrich) |
-| `--agent` | Run Claude agent for intelligent cleanup |
+| `-d, --depth` | Analysis depth: `low`, `medium` (default), `high` |
+| `-l, --local` | Use local LLM/VLM instead of cloud (Claude) |
+| `-p, --provider` | LLM provider: `lm_studio` (default), `ollama` |
+| `-m, --model` | Override LLM/VLM model name |
+| `--keep-raw` | Save raw Docling extraction alongside processed output |
 | `--raw` | Skip all processing, output only raw extraction |
 | `--images-scale N` | Image resolution multiplier (default: 2.0) |
+| `--min-image-width` | Minimum image width in pixels, filters logos (default: 200) |
+| `--min-image-height` | Minimum image height in pixels (default: 150) |
+| `--min-image-area` | Minimum image area in pixels (default: 40000) |
 
 **Output:**
 ```
@@ -49,15 +66,44 @@ output/paper/
 │   ├── figure1.png
 │   ├── figure2.png
 │   └── ...
-├── enrichments.json      # All metadata (if --enrich)
-├── figures.json          # Figure metadata (if --enrich)
-├── equations.json        # Equations with LaTeX (if --enrich)
-└── code_blocks.json      # Code with language detection (if --enrich)
+├── enrichments.json      # All metadata (depth=high only)
+├── figures.json          # Figure metadata
+├── equations.json        # Equations with LaTeX
+└── code_blocks.json      # Code with language detection
 ```
 
-### `pdf2md enrich` - Extract Metadata Only
+### `pdf2md retouch` - LLM Cleanup Only
 
-Extract structured metadata from a PDF without full conversion:
+Run LLM-based cleanup on an existing markdown file:
+
+```bash
+uv run pdf2md retouch paper.md [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-l, --local` | Use local LLM instead of cloud (Claude) |
+| `-p, --provider` | LLM provider: `lm_studio`, `ollama` |
+| `-m, --model` | Override LLM model name |
+| `-i, --images` | Path to images directory (default: `./img`) |
+| `-v, --verbose` | Show detailed LLM progress |
+
+The retouch step fixes:
+- **Author formatting** - Extracts and formats author names, affiliations, emails
+- **Lettered section headers** - Classifies `A. Background` vs `A. We conducted...`
+
+### `pdf2md postprocess` - Rule-Based Fixes Only
+
+```bash
+uv run pdf2md postprocess paper.md [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-i, --images` | Path to images directory (default: `./img`) |
+| `-o, --output` | Output path (default: overwrite input file) |
+
+### `pdf2md enrich` - Extract RAG Metadata
 
 ```bash
 uv run pdf2md enrich paper.pdf ./output [OPTIONS]
@@ -65,33 +111,11 @@ uv run pdf2md enrich paper.pdf ./output [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--no-code` | Skip code language detection |
-| `--no-formulas` | Skip equation/LaTeX extraction |
-| `--no-classify` | Skip figure classification |
-| `--describe` | Generate AI descriptions for figures (slow) |
-
-**Example output (`figures.json`):**
-```json
-{
-  "figure_id": 1,
-  "caption": "Fig. 1. ChronoLog design overview",
-  "classification": "other (0.86)",
-  "page": 6,
-  "image_path": "./img/figure1.png"
-}
-```
-
-### `pdf2md postprocess` - Re-process Existing Markdown
-
-```bash
-uv run pdf2md postprocess existing.md --output cleaned.md
-```
-
-### `pdf2md agent` - Run AI Cleanup Only
-
-```bash
-uv run pdf2md agent existing.md --verbose
-```
+| `--describe` | Generate VLM descriptions for figures |
+| `-l, --local` | Use local VLM instead of cloud |
+| `-p, --provider` | VLM provider: `lm_studio`, `ollama` |
+| `-m, --model` | Override VLM model |
+| `--images-scale N` | Image resolution multiplier (default: 2.0) |
 
 ## Processing Pipeline
 
@@ -105,107 +129,118 @@ Uses [Docling](https://github.com/DS4SD/docling) (ML-based) to extract:
 
 ### 2. Deterministic Post-Processing
 
+Applied at all depth levels (including `low`):
+
 **Citations:**
 - `[7]` → `[[7]](#ref-7)` (clickable links)
-- `[11]-[14]` → `[[11]](#ref-11), [[12]](#ref-12), [[13]](#ref-13), [[14]](#ref-14)` (range expansion)
+- `[11]-[14]` → expanded to four individual linked citations
+- Anchors added to reference entries for link targets
 
 **Sections:**
-- `Abstract -Text here` → `## Abstract\n\nText here` (artifact cleanup)
-- `Index Terms -keywords` → `## Index Terms\n\nkeywords`
+- `Abstract -Text here` → `## Abstract\n\nText here`
+- Hierarchical section numbering → proper markdown headers
 
 **Figures:**
-- Embeds `![Figure N](./img/figureN.png)` above captions
+- Embeds `![Figure N](./img/figureN.png)` above line-start captions
+- Each figure embedded exactly once
 
 **Bibliography:**
-- Adds anchors: `<a id="ref-1"></a>[1] Author...`
-- Ensures blank lines between entries
+- Adds `<a id="ref-N"></a>` anchors to reference entries
+- Ensures proper spacing between entries
 
 **Cleanup:**
 - Fixes ligatures (ﬁ→fi, ﬂ→fl)
-- Removes excessive blank lines
+- Removes GLYPH artifacts from OCR
+- Fixes hyphenated word breaks across lines
+- Merges split paragraphs
+- Removes OCR garbage near figure embeds
 
-### 3. AI Agent Cleanup (Optional)
+### 3. LLM Retouch (medium, high depth)
 
-When `--agent` is specified, Claude reviews and fixes:
+Uses LLM to fix issues that need judgment:
+- **Author formatting** - Extracts names, affiliations, emails into structured `## Authors` section
+- **Lettered sections** - Classifies `A. Background` as header vs `A. We conducted...` as sentence
 
-- **Misplaced figures** - Moves images to the section that references them
-- **OCR artifacts** - Removes garbage text extracted from figure images
-- **Formatting issues** - Tables, headers, lists that didn't convert properly
-- **Any other problems** - Open-ended review for quality
+### 4. VLM + Enrichments (high depth)
 
-### 4. RAG Enrichments (Optional)
-
-When `--enrich` is specified, extracts structured data:
+Extracts structured data for RAG:
 
 | File | Contents |
 |------|----------|
-| `figures.json` | Caption, classification (bar_chart, line_chart, etc.), page number |
+| `figures.json` | Caption, classification, VLM description, page number |
 | `equations.json` | LaTeX representation, surrounding context |
 | `code_blocks.json` | Code text, detected language |
 | `enrichments.json` | All of the above combined |
 
-## Requirements
+## Local AI Setup
+
+pdf2md supports running entirely locally using LM Studio or Ollama:
+
+```bash
+# Using LM Studio (default local provider)
+export LM_STUDIO_HOST=http://localhost:1234/v1
+uv run pdf2md convert paper.pdf ./output --local
+
+# Using Ollama
+export OLLAMA_HOST=http://localhost:11434
+uv run pdf2md convert paper.pdf ./output --local --provider ollama
+
+# Override model
+uv run pdf2md convert paper.pdf ./output --local --model qwen3-8b
+
+# VLM on a separate node
+export PDF2MD_VLM_HOST=http://192.168.1.100:1234/v1
+uv run pdf2md convert paper.pdf ./output -d high --local
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PDF2MD_TEXT_MODEL` | `qwen3-4b` | Text LLM for retouch |
+| `PDF2MD_VLM_MODEL` | `qwen3-vl-4b` | VLM for figure descriptions |
+| `PDF2MD_PROVIDER` | `lm_studio` | Default provider |
+| `LM_STUDIO_HOST` | `http://localhost:1234/v1` | LM Studio endpoint |
+| `PDF2MD_VLM_HOST` | `http://localhost:1234/v1` | VLM endpoint (can differ from text) |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama endpoint |
+
+## Installation
+
+```bash
+# Full installation (all features)
+pip install pdf2md[all]
+
+# Or install groups selectively:
+pip install pdf2md[docling]       # PDF extraction
+pip install pdf2md[agent]         # Claude cloud backend
+pip install pdf2md[agent-local]   # Local LLM backend (LiteLLM)
+pip install pdf2md[all-agents]    # Both backends
+
+# Development
+pip install pdf2md[dev]           # pytest + ruff
+```
+
+### Requirements
 
 - Python 3.10-3.12
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - **Docling**: Automatically downloads ML models on first use (~500MB)
 
-### Optional Dependencies
-
-#### For `--describe` (AI figure descriptions)
-
-Requires [Ollama](https://ollama.com/) running locally with a vision-capable model:
+## Batch Processing
 
 ```bash
-# Install Ollama from https://ollama.com/download
-# Then pull the llava model
-ollama pull llava:7b
+# Convert all PDFs in a directory
+uv run python scripts/batch_convert.py papers/ output/
 
-# Start the Ollama server (if not running as a service)
-ollama serve
+# Fast batch (no AI)
+uv run python scripts/batch_convert.py papers/ output/ --depth low
+
+# Full batch with local LLM
+uv run python scripts/batch_convert.py papers/ output/ --depth high --local
+
+# Dry run to see what would be processed
+uv run python scripts/batch_convert.py papers/ output/ --dry-run
 ```
-
-The `--describe` flag uses Ollama to generate natural language descriptions of figures, useful for RAG systems that need to search figure content.
-
-#### For `--agent` (AI cleanup)
-
-Requires [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to have been run at least once on your machine. This sets up the necessary authentication and SDK configuration.
-
-```bash
-# Install and run Claude Code once to set up authentication
-npm install -g @anthropic-ai/claude-code
-claude
-
-# After initial setup, the --agent flag will work
-```
-
-The agent uses the Claude Code SDK to intelligently clean up extraction artifacts, reposition figures, and fix formatting issues.
-
-## Example Workflow
-
-```bash
-# 1. Convert with all features
-uv run pdf2md convert paper.pdf ./output --keep-raw --enrich --agent
-
-# 2. Check the outputs
-ls ./output/paper/
-# paper.md          - Final clean markdown
-# paper_raw.md      - Original for comparison
-# img/              - All figures
-# figures.json      - Figure metadata for RAG
-# enrichments.json  - All structured data
-
-# 3. Use in your RAG system
-cat ./output/paper/figures.json | jq '.[] | .caption'
-# "Fig. 1. ChronoLog design overview"
-# "Fig. 2. ChronoLog API"
-# ...
-```
-
-## Untested
-
-- **Equations**: LaTeX extraction depends on PDF structure; some papers may not extract well
-- **Code blocks**: Only detected if the PDF has proper structure; scanned PDFs won't work
 
 ## License
 

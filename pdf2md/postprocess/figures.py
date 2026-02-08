@@ -71,19 +71,23 @@ def _embed_figures_at_captions(content: str, figure_map: dict[int, str]) -> str:
     """
     lines = content.split("\n")
     result = []
+    # Pre-populate with figures already embedded in content (idempotence)
     embedded_figures: set[int] = set()
+    for match in re.finditer(r"!\[Figure (\d+)\]", content):
+        embedded_figures.add(int(match.group(1)))
 
     for i, line in enumerate(lines):
-        # Check if this line contains a figure caption
-        # Pattern: "Fig." or "Figure" followed by number
-        caption_match = re.search(
-            r"(?:^|\s)(Fig(?:ure)?\.?\s*(\d+))[.:\s]",
+        # Check if this line starts with a figure caption
+        # Only match at line start to avoid mid-sentence false positives
+        # like "As shown in Fig. 1..."
+        caption_match = re.match(
+            r"^\s*(?:\*\*)?Fig(?:ure)?\.?\s*(\d+)[.:\s]",
             line,
             re.IGNORECASE,
         )
 
         if caption_match:
-            fig_num = int(caption_match.group(2))
+            fig_num = int(caption_match.group(1))
 
             # Only embed if we have the image and haven't embedded it yet
             if fig_num in figure_map and fig_num not in embedded_figures:

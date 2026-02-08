@@ -1,13 +1,12 @@
 """Unit tests for sections.py postprocessing."""
 
-import pytest
 from pdf2md.postprocess.sections import (
-    process_sections,
-    _fix_abstract_header,
-    _fix_index_terms_header,
-    _fix_hierarchical_sections,
     _determine_header_level,
+    _fix_abstract_header,
+    _fix_hierarchical_sections,
+    _fix_index_terms_header,
     _is_section_title,
+    process_sections,
 )
 
 
@@ -144,14 +143,14 @@ Previous studies have shown...
 Index Terms -HPC, storage, performance
 """
         result = process_sections(content)
-        
+
         # Abstract should be fixed
         assert "## Abstract\n\nThis paper" in result
-        
+
         # Hierarchical sections should be converted
         assert "### 3.1 Background" in result
         assert "#### 3.1.1 Related work" in result
-        
+
         # Index terms should be fixed
         assert "## Index Terms\n\nHPC" in result
 

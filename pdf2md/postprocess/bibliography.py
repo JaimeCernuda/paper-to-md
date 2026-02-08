@@ -52,9 +52,7 @@ def _format_reference_entries(references_text: str) -> str:
     for line in lines:
         # Check if this line starts a new reference entry
         # Match: [N], <a...></a>[N], or - [N]
-        is_reference_start = bool(
-            re.match(r"^\s*(?:<a[^>]*></a>)?(?:-\s*)?\[(\d{1,3})\]", line)
-        )
+        is_reference_start = bool(re.match(r"^\s*(?:<a[^>]*></a>)?(?:-\s*)?\[(\d{1,3})\]", line))
 
         # Add blank line before new reference if previous line wasn't blank
         if is_reference_start and prev_was_reference:
@@ -67,19 +65,3 @@ def _format_reference_entries(references_text: str) -> str:
         )
 
     return "\n".join(result)
-
-
-def extract_reference_count(content: str) -> int:
-    """
-    Count the number of references in the bibliography.
-
-    Args:
-        content: Markdown content
-
-    Returns:
-        Number of reference entries found
-    """
-    # Find all [N] patterns that look like reference entries
-    # (at start of line, after anchor, or after blank line)
-    matches = re.findall(r"^\s*(?:<a[^>]*></a>)?\[(\d+)\]", content, re.MULTILINE)
-    return len(matches)
