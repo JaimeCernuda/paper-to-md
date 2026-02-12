@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
-COPY pyproject.toml .
+COPY pyproject.toml README.md ./
 COPY pdf2md/ pdf2md/
 COPY service/ service/
 COPY migrations/ migrations/
