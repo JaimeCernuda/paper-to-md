@@ -2,13 +2,17 @@
 
 Convert academic PDF papers to clean, readable markdown with linked citations, embedded figures, and structured metadata for RAG systems.
 
-## What It Does
+## Contents
 
-**pdf2md** takes a PDF academic paper and produces:
-
-1. **Clean Markdown** - Properly formatted with linked citations, embedded figures, and fixed extraction artifacts
-2. **Extracted Figures** - All figures as high-resolution PNG files
-3. **RAG-Ready Metadata** - JSON files with figure captions, classifications, equations, and code blocks
+- [Quick Start](#quick-start) — install and convert a paper
+- [Depth Levels](#depth-levels) — control how much processing is applied
+- [Direct CLI Usage](#direct-cli-usage) — convert PDFs locally
+- [Service Mode](#service-mode) — Docker microservice for remote/homelab use
+- [Claude Code Integration](#claude-code-integration) — MCP server + `/convert-paper` command
+- [Processing Pipeline](#processing-pipeline) — what happens at each stage
+- [Local AI Setup](#local-ai-setup) — run with LM Studio or Ollama
+- [Installation](#installation) — extras and requirements
+- [Batch Processing](#batch-processing) — convert many papers at once
 
 ## Quick Start
 
@@ -36,9 +40,9 @@ pdf2md uses a depth-based system to control how much processing is applied:
 | `medium` | + LLM retouch (author formatting, lettered section detection) | Moderate |
 | `high` | + VLM figure descriptions + code/equation enrichments | Slow |
 
-## Commands
+## Direct CLI Usage
 
-### `pdf2md convert` - Main Conversion
+### `pdf2md convert` — Main Conversion
 
 ```bash
 uv run pdf2md convert paper.pdf ./output [OPTIONS]
@@ -72,7 +76,7 @@ output/paper/
 └── code_blocks.json      # Code with language detection
 ```
 
-### `pdf2md retouch` - LLM Cleanup Only
+### `pdf2md retouch` — LLM Cleanup Only
 
 Run LLM-based cleanup on an existing markdown file:
 
@@ -89,10 +93,10 @@ uv run pdf2md retouch paper.md [OPTIONS]
 | `-v, --verbose` | Show detailed LLM progress |
 
 The retouch step fixes:
-- **Author formatting** - Extracts and formats author names, affiliations, emails
-- **Lettered section headers** - Classifies `A. Background` vs `A. We conducted...`
+- **Author formatting** — Extracts and formats author names, affiliations, emails
+- **Lettered section headers** — Classifies `A. Background` as header vs `A. We conducted...` as sentence
 
-### `pdf2md postprocess` - Rule-Based Fixes Only
+### `pdf2md postprocess` — Rule-Based Fixes Only
 
 ```bash
 uv run pdf2md postprocess paper.md [OPTIONS]
@@ -103,7 +107,7 @@ uv run pdf2md postprocess paper.md [OPTIONS]
 | `-i, --images` | Path to images directory (default: `./img`) |
 | `-o, --output` | Output path (default: overwrite input file) |
 
-### `pdf2md enrich` - Extract RAG Metadata
+### `pdf2md enrich` — Extract RAG Metadata
 
 ```bash
 uv run pdf2md enrich paper.pdf ./output [OPTIONS]
@@ -116,6 +120,103 @@ uv run pdf2md enrich paper.pdf ./output [OPTIONS]
 | `-p, --provider` | VLM provider: `lm_studio`, `ollama` |
 | `-m, --model` | Override VLM model |
 | `--images-scale N` | Image resolution multiplier (default: 2.0) |
+
+## Service Mode
+
+Run pdf2md as a Docker microservice for remote or homelab use. The service provides an HTTP API with Ed25519 signature authentication and async job processing via Redis/arq.
+
+### Docker Deployment
+
+```bash
+# Start all services (API, worker, PostgreSQL, Redis)
+docker compose up -d --build
+
+# Run database migrations
+docker compose exec api alembic upgrade head
+
+# Check logs
+docker compose logs -f worker
+```
+
+### API Endpoints
+
+All endpoints require Ed25519 signature authentication (see [Auth Setup](#auth-setup)).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/submit_paper` | Upload a PDF and enqueue conversion. Returns `job_id`. |
+| `GET` | `/status/{job_id}` | Check job status, progress, and errors. |
+| `GET` | `/retrieve/{job_id}` | Download completed results as `tar.gz`. |
+
+**Submit example:**
+```bash
+curl -X POST http://your-server:8000/submit_paper \
+  -F "file=@paper.pdf" \
+  -F "depth=medium" \
+  -H "Authorization: Signature <base64-sig>" \
+  -H "X-Timestamp: $(date +%s)" \
+  -H "X-Client-Id: <your-uuid>"
+```
+
+### Auth Setup
+
+The service uses Ed25519 keypairs for authentication. Each client has a UUID and a public key stored in the database; requests are signed with the corresponding private key.
+
+**Signature format:** `METHOD\nPATH\nTIMESTAMP` signed with the client's Ed25519 private key.
+
+**Headers required:**
+- `Authorization: Signature <base64-signature>`
+- `X-Timestamp: <unix-epoch>`
+- `X-Client-Id: <client-uuid>`
+
+Timestamps must be within 5 minutes of server time (configurable via `PDF2MD_SERVICE_AUTH_TIMESTAMP_TOLERANCE_SECONDS`).
+
+### Service Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PDF2MD_SERVICE_DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL connection string |
+| `PDF2MD_SERVICE_REDIS_URL` | `redis://localhost:6379` | Redis connection string |
+| `PDF2MD_SERVICE_DATA_DIR` | `/data` | Root data directory |
+| `PDF2MD_SERVICE_UPLOAD_DIR` | `/data/uploads` | PDF upload storage |
+| `PDF2MD_SERVICE_AUTH_TIMESTAMP_TOLERANCE_SECONDS` | `300` | Signature freshness window |
+| `PDF2MD_SERVICE_WORKER_MAX_JOBS` | `1` | Concurrent conversion jobs |
+
+## Claude Code Integration
+
+### MCP Server
+
+The `mcp/server.py` script exposes the service API as MCP tools for Claude Code. It loads credentials from a `.env` file in the repo root.
+
+**Register the server:**
+```bash
+claude mcp add --scope user pdf2md-service -- uv run /path/to/paper-to-md/mcp/server.py
+```
+
+**Required `.env` variables** (not committed — see `.env.example`):
+```
+PDF2MD_SERVICE_URL=http://your-server:8000
+PDF2MD_CLIENT_ID=00000000-0000-0000-0000-000000000001
+PDF2MD_PRIVATE_KEY=<base64-ed25519-private-key>
+```
+
+**Tools provided:**
+
+| Tool | Description |
+|------|-------------|
+| `pdf2md_submit` | Upload a PDF and start conversion. Returns job ID. |
+| `pdf2md_status` | Poll job status and progress. |
+| `pdf2md_retrieve` | Download and extract completed results. |
+
+### `/convert-paper` Command
+
+A project-level slash command in `.claude/commands/convert-paper.md` that orchestrates the full conversion workflow.
+
+```
+/convert-paper path/to/paper.pdf
+```
+
+This submits the PDF, polls for completion, downloads results, and reports extracted files. Auto-discovered by Claude Code when working in this repo.
 
 ## Processing Pipeline
 
@@ -158,8 +259,8 @@ Applied at all depth levels (including `low`):
 ### 3. LLM Retouch (medium, high depth)
 
 Uses LLM to fix issues that need judgment:
-- **Author formatting** - Extracts names, affiliations, emails into structured `## Authors` section
-- **Lettered sections** - Classifies `A. Background` as header vs `A. We conducted...` as sentence
+- **Author formatting** — Extracts names, affiliations, emails into structured `## Authors` section
+- **Lettered sections** — Classifies `A. Background` as header vs `A. We conducted...` as sentence
 
 ### 4. VLM + Enrichments (high depth)
 

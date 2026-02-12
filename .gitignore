@@ -38,6 +38,9 @@ rag/
 # Logs
 *.log
 
+# Secrets
+.env
+
 # OS
 .DS_Store
 Thumbs.db
