@@ -1,0 +1,62 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PDF2MD_SERVICE_DATABASE_URL=postgresql+asyncpg://pdf2md:pdf2md@postgres:5432/pdf2md
+      - PDF2MD_SERVICE_REDIS_URL=redis://redis:6379
+      - PDF2MD_SERVICE_DATA_DIR=/data
+      - PDF2MD_SERVICE_UPLOAD_DIR=/data/uploads
+    volumes:
+      - pdf2md-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["python", "-m", "arq", "service.worker.WorkerSettings"]
+    environment:
+      - PDF2MD_SERVICE_DATABASE_URL=postgresql+asyncpg://pdf2md:pdf2md@postgres:5432/pdf2md
+      - PDF2MD_SERVICE_REDIS_URL=redis://redis:6379
+      - PDF2MD_SERVICE_DATA_DIR=/data
+      - PDF2MD_SERVICE_UPLOAD_DIR=/data/uploads
+    volumes:
+      - pdf2md-data:/data
+      - ~/.claude:/root/.claude:ro  # Mount OAuth credentials for Claude Agent SDK
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=pdf2md
+      - POSTGRES_PASSWORD=pdf2md
+      - POSTGRES_DB=pdf2md
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdf2md"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pdf2md-data:
+  redis-data:
+  postgres-data:
