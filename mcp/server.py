@@ -54,7 +54,7 @@ async def pdf2md_submit(pdf_path: str, depth: str = "medium") -> str:
                 data={"depth": depth},
                 headers=_sign("POST", "/submit_paper"),
             )
-    if resp.status_code != 200:
+    if resp.status_code not in (200, 202):
         return f"Error {resp.status_code}: {resp.text[:200]}"
     data = resp.json()
     return f"job_id: {data['job_id']}, status: {data.get('status', 'queued')}"
