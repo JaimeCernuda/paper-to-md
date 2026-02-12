@@ -16,7 +16,8 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from nacl.signing import SigningKey
 
-load_dotenv()
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(_REPO_ROOT / ".env")
 
 BASE_URL = os.environ.get("PDF2MD_SERVICE_URL", "http://localhost:8000")
 CLIENT_ID = os.environ["PDF2MD_CLIENT_ID"]
