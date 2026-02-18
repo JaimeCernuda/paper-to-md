@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pdf2md"
+name = "paper-to-md"
 version = "0.2.0"
 description = "Convert academic PDF papers to clean markdown using Docling + AI cleanup"
 readme = "README.md"
@@ -29,25 +29,12 @@ dependencies = [
     "rich>=13.0.0",
     "Pillow>=10.0.0",
     "pymupdf>=1.26.6",
+    "docling>=2.0.0",
+    "claude-agent-sdk>=0.1.14",
+    "litellm>=1.50.0",
 ]
 
 [project.optional-dependencies]
-docling = [
-    "docling>=2.0.0",
-]
-# Claude Agent SDK (cloud)
-agent = [
-    "claude-agent-sdk>=0.1.14",
-]
-# Local LLM backend (LM Studio, Ollama)
-agent-local = [
-    "litellm>=1.50.0",
-]
-# All agent backends
-all-agents = [
-    "claude-agent-sdk>=0.1.14",
-    "litellm>=1.50.0",
-]
 # Docker microservice
 service = [
     "fastapi>=0.115.0",
@@ -60,12 +47,6 @@ service = [
     "pynacl>=1.5.0",
     "pydantic-settings>=2.0.0",
     "structlog>=24.0.0",
-]
-# Full installation
-all = [
-    "docling>=2.0.0",
-    "claude-agent-sdk>=0.1.14",
-    "litellm>=1.50.0",
 ]
 dev = [
     "pytest>=8.0.0",

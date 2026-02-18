@@ -521,5 +521,41 @@ def enrich(
     console.print(f"  Output: {doc_dir / 'enrichments.json'}")
 
 
+@app.command("download-models")
+def download_models() -> None:
+    """
+    Pre-download Docling ML models (~500MB).
+
+    Downloads and caches the models Docling needs for PDF extraction.
+    Run this once after installation to avoid slow first-run downloads.
+    Models are cached in ~/.cache/docling/ and reused across runs.
+
+    \b
+    EXAMPLES:
+        pdf2md download-models
+    """
+    from pdf2md.extraction.docling import DoclingNotInstalledError
+
+    console.print("\n[bold]Downloading Docling ML models...[/bold]")
+    console.print("Models will be cached in ~/.cache/docling/\n")
+
+    try:
+        from docling.datamodel.base_models import InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.document_converter import DocumentConverter, PdfFormatOption
+    except ImportError as e:
+        raise DoclingNotInstalledError() from e
+
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.generate_picture_images = True
+
+    console.print("[*] Initializing DocumentConverter (this triggers model downloads)...")
+    DocumentConverter(
+        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+    )
+
+    console.print("\n[bold green]Done![/bold green] Docling models are cached and ready.")
+
+
 if __name__ == "__main__":
     app()

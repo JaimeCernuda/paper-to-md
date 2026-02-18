@@ -90,7 +90,7 @@ def extract_enrichments(
         from docling.document_converter import DocumentConverter, PdfFormatOption
     except ImportError as e:
         raise ImportError(
-            "Docling is not installed. Install with: pip install pdf2md[docling]"
+            "Docling is not installed. Install with: pip install paper-to-md"
         ) from e
 
     pdf_stem = pdf_path.stem

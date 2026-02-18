@@ -17,17 +17,20 @@ Convert academic PDF papers to clean, readable markdown with linked citations, e
 ## Quick Start
 
 ```bash
-# Install with uv
-uv sync --all-extras
+# Install
+pip install paper-to-md
 
-# Basic conversion (medium depth — Docling + postprocess + LLM retouch)
-uv run pdf2md convert paper.pdf ./output
+# Pre-download Docling ML models (~500MB, one-time)
+pdf2md download-models
+
+# Convert a paper (Docling + postprocess + LLM retouch)
+pdf2md convert paper.pdf ./output
 
 # Fast conversion (no AI)
-uv run pdf2md convert paper.pdf ./output -d low
+pdf2md convert paper.pdf ./output -d low
 
 # Full pipeline with local LLM
-uv run pdf2md convert paper.pdf ./output -d high --local
+pdf2md convert paper.pdf ./output -d high --local
 ```
 
 ## Depth Levels
@@ -308,24 +311,23 @@ uv run pdf2md convert paper.pdf ./output -d high --local
 ## Installation
 
 ```bash
-# Full installation (all features)
-pip install pdf2md[all]
+# Standard install — includes Docling, Claude Agent SDK, and LiteLLM
+pip install paper-to-md
 
-# Or install groups selectively:
-pip install pdf2md[docling]       # PDF extraction
-pip install pdf2md[agent]         # Claude cloud backend
-pip install pdf2md[agent-local]   # Local LLM backend (LiteLLM)
-pip install pdf2md[all-agents]    # Both backends
+# Pre-download Docling ML models (~500MB, one-time)
+pdf2md download-models
 
-# Development
-pip install pdf2md[dev]           # pytest + ruff
+# Docker microservice dependencies
+pip install paper-to-md[service]
+
+# Development (pytest + ruff)
+pip install paper-to-md[dev]
 ```
 
 ### Requirements
 
 - Python 3.10-3.12
-- [uv](https://docs.astral.sh/uv/) for dependency management
-- **Docling**: Automatically downloads ML models on first use (~500MB)
+- [uv](https://docs.astral.sh/uv/) recommended for dependency management
 
 ## Batch Processing
 

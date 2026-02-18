@@ -18,9 +18,12 @@ COPY migrations/ migrations/
 COPY alembic.ini .
 COPY scripts/ scripts/
 
-# Create venv and install all deps (docling + agent + service)
+# Create venv and install all deps (docling + agents are core, service is extra)
 RUN uv venv /app/.venv && \
-    VIRTUAL_ENV=/app/.venv uv pip install ".[docling,agent,service]"
+    VIRTUAL_ENV=/app/.venv uv pip install ".[service]"
+
+# Pre-download Docling ML models so first conversion is fast
+RUN VIRTUAL_ENV=/app/.venv /app/.venv/bin/pdf2md download-models
 
 
 # Stage 2: Runtime — slim image with only what's needed

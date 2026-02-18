@@ -11,7 +11,7 @@ class AgentNotInstalledError(ImportError):
 
     def __init__(self) -> None:
         super().__init__(
-            "Claude Agent SDK is not installed. Install with: pip install pdf2md[agent]"
+            "Claude Agent SDK is not installed. Install with: pip install paper-to-md"
         )
 
 

@@ -21,8 +21,8 @@ class DoclingNotInstalledError(ImportError):
 
     def __init__(self) -> None:
         super().__init__(
-            "Docling is not installed. Install with: pip install pdf2md[docling]\n"
-            "Note: Docling requires ~500MB for ML models."
+            "Docling is not installed. Install with: pip install paper-to-md\n"
+            "Then run: pdf2md download-models"
         )
 
 

@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10, <3.13"
 resolution-markers = [
     "python_full_version >= '3.12' and sys_platform == 'darwin'",
@@ -1883,10 +1883,13 @@ wheels = [
 ]
 
 [[package]]
-name = "pdf2md"
+name = "paper-to-md"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "claude-agent-sdk" },
+    { name = "docling" },
+    { name = "litellm" },
     { name = "pillow" },
     { name = "pymupdf" },
     { name = "rich" },
@@ -1894,30 +1897,12 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-agent = [
-    { name = "claude-agent-sdk" },
-]
-agent-local = [
-    { name = "litellm" },
-]
-all = [
-    { name = "claude-agent-sdk" },
-    { name = "docling" },
-    { name = "litellm" },
-]
-all-agents = [
-    { name = "claude-agent-sdk" },
-    { name = "litellm" },
-]
 dev = [
     { name = "aiosqlite" },
     { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
-]
-docling = [
-    { name = "docling" },
 ]
 service = [
     { name = "alembic" },
@@ -1938,16 +1923,11 @@ requires-dist = [
     { name = "alembic", marker = "extra == 'service'", specifier = ">=1.14.0" },
     { name = "arq", marker = "extra == 'service'", specifier = ">=0.26.0" },
     { name = "asyncpg", marker = "extra == 'service'", specifier = ">=0.30.0" },
-    { name = "claude-agent-sdk", marker = "extra == 'agent'", specifier = ">=0.1.14" },
-    { name = "claude-agent-sdk", marker = "extra == 'all'", specifier = ">=0.1.14" },
-    { name = "claude-agent-sdk", marker = "extra == 'all-agents'", specifier = ">=0.1.14" },
-    { name = "docling", marker = "extra == 'all'", specifier = ">=2.0.0" },
-    { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0.0" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.14" },
+    { name = "docling", specifier = ">=2.0.0" },
     { name = "fastapi", marker = "extra == 'service'", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
-    { name = "litellm", marker = "extra == 'agent-local'", specifier = ">=1.50.0" },
-    { name = "litellm", marker = "extra == 'all'", specifier = ">=1.50.0" },
-    { name = "litellm", marker = "extra == 'all-agents'", specifier = ">=1.50.0" },
+    { name = "litellm", specifier = ">=1.50.0" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "pydantic-settings", marker = "extra == 'service'", specifier = ">=2.0.0" },
     { name = "pymupdf", specifier = ">=1.26.6" },
@@ -1962,7 +1942,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.15.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.30.0" },
 ]
-provides-extras = ["docling", "agent", "agent-local", "all-agents", "service", "all", "dev"]
+provides-extras = ["service", "dev"]
 
 [[package]]
 name = "pillow"

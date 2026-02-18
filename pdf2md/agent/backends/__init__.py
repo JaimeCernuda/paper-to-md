@@ -34,7 +34,7 @@ def get_backend(name: str = "claude") -> AgentBackend:
 
             return ClaudeBackend()
         except ImportError:
-            raise BackendNotInstalledError("claude", "pip install 'pdf2md[agent]'")
+            raise BackendNotInstalledError("claude", "pip install paper-to-md")
 
     elif name == "local":
         try:
@@ -42,7 +42,7 @@ def get_backend(name: str = "claude") -> AgentBackend:
 
             return LocalBackend()
         except ImportError:
-            raise BackendNotInstalledError("local", "pip install 'pdf2md[agent-local]'")
+            raise BackendNotInstalledError("local", "pip install paper-to-md")
 
     else:
         raise ValueError(f"Unknown backend: {name}. Available: claude, local")

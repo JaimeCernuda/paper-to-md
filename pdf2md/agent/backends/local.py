@@ -396,7 +396,7 @@ class LocalBackend(AgentBackend):
         except ImportError as e:
             raise ImportError(
                 "Local backend dependencies not installed. "
-                "Install with: pip install 'pdf2md[agent-local]'"
+                "Install with: pip install paper-to-md"
             ) from e
 
         from ..providers import get_provider_config
@@ -439,7 +439,7 @@ class LocalBackend(AgentBackend):
         except ImportError as e:
             raise ImportError(
                 "Local backend dependencies not installed. "
-                "Install with: pip install 'pdf2md[agent-local]'"
+                "Install with: pip install paper-to-md"
             ) from e
 
         from ..providers import get_vlm_config

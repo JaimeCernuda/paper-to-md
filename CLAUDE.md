@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run Commands
 
 ```bash
-uv sync --all-extras          # Install all dependencies
+uv sync                        # Install all dependencies
+uv run pdf2md download-models  # Pre-download Docling ML models (one-time)
 uv run pdf2md convert paper.pdf ./output  # Basic conversion
 uv run pytest                  # Run all tests
 uv run pytest tests/test_figures.py::TestBuildFigureMap::test_standard_naming  # Single test
@@ -66,7 +67,6 @@ OLLAMA_HOST=http://localhost:11434
 
 ## Optional Dependencies
 
-Install groups selectively:
-- `pip install pdf2md[docling]` - Docling for PDF extraction
-- `pip install pdf2md[agent]` - Claude Agent SDK
-- `pip install pdf2md[agent-local]` - OpenAI Agents SDK + LiteLLM for local models
+All conversion dependencies (Docling, Claude Agent SDK, LiteLLM) are included by default.
+- `pip install paper-to-md[service]` - FastAPI/Redis/PostgreSQL for Docker microservice
+- `pip install paper-to-md[dev]` - pytest + ruff for development
