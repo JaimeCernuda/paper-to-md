@@ -40,8 +40,8 @@ def convert(
         resolve_path=True,
     ),
     output_dir: Path = typer.Argument(
-        ...,
-        help="Output directory for extracted content",
+        None,
+        help="Output directory for extracted content (default: directory containing the PDF)",
         resolve_path=True,
     ),
     # --- Core options ---
@@ -119,15 +119,19 @@ def convert(
 
     \b
     EXAMPLES:
-        pdf2md convert paper.pdf ./out                  # medium, cloud
-        pdf2md convert paper.pdf ./out -d low           # fast, no AI
-        pdf2md convert paper.pdf ./out -d high          # thorough
-        pdf2md convert paper.pdf ./out --local          # medium, local LLM
-        pdf2md convert paper.pdf ./out -l -d high       # local LLM + VLM
+        pdf2md convert paper.pdf                        # medium (default), output next to PDF
+        pdf2md convert paper.pdf ./out                  # medium, explicit output dir
+        pdf2md convert paper.pdf -d low                 # fast, no AI
+        pdf2md convert paper.pdf -d high                # thorough
+        pdf2md convert paper.pdf --local                # medium, local LLM
+        pdf2md convert paper.pdf -l -d high             # local LLM + VLM
     """
     from pdf2md.agent.providers import resolve_provider
     from pdf2md.extraction.docling import DoclingNotInstalledError, extract_with_docling
     from pdf2md.postprocess import process_markdown
+
+    if output_dir is None:
+        output_dir = pdf_path.parent
 
     pdf_stem = pdf_path.stem
     doc_dir = output_dir / pdf_stem

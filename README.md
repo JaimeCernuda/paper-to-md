@@ -18,38 +18,54 @@ Convert academic PDF papers to clean, readable markdown with linked citations, e
 
 ```bash
 # Install
-pip install paper-to-md
+uv tool install paper-to-md
 
 # Pre-download Docling ML models (~500MB, one-time)
 pdf2md download-models
 
-# Convert a paper (Docling + postprocess + LLM retouch)
+# Convert a paper — uses medium depth by default (Docling + postprocess + LLM retouch)
+pdf2md convert paper.pdf
+
+# Output goes to ./paper/paper.md (same directory as the PDF)
+# Or specify an output directory explicitly:
 pdf2md convert paper.pdf ./output
-
-# Fast conversion (no AI)
-pdf2md convert paper.pdf ./output -d low
-
-# Full pipeline with local LLM
-pdf2md convert paper.pdf ./output -d high --local
 ```
 
 ## Depth Levels
 
-pdf2md uses a depth-based system to control how much processing is applied:
+pdf2md uses a depth-based system to control how much processing is applied.
+**The default is `medium`.**
 
-| Depth | What happens | Speed |
-|-------|-------------|-------|
-| `low` | Docling extraction + rule-based postprocessing (citations, figures, sections, cleanup) | Fast, no AI |
-| `medium` | + LLM retouch (author formatting, lettered section detection) | Moderate |
-| `high` | + VLM figure descriptions + code/equation enrichments | Slow |
+| Depth | Default? | What happens | AI required? |
+|-------|----------|-------------|-------------|
+| `low` | | Docling extraction + rule-based postprocessing (citations, figures, sections, cleanup) | No |
+| **`medium`** | **yes** | Everything in `low` + LLM retouch via [Claude Agent SDK](https://github.com/anthropics/claude-code-sdk-python) (author formatting, lettered section headers, figure relocation, paragraph merging) | Yes (Claude API or `--local`) |
+| `high` | | Everything in `medium` + VLM figure descriptions + code/equation enrichments | Yes (Claude API or `--local`) |
+
+```bash
+# Fast, no AI needed
+pdf2md convert paper.pdf -d low
+
+# Default — includes agentic LLM cleanup (Claude)
+pdf2md convert paper.pdf
+
+# Full pipeline — adds VLM figure descriptions and RAG metadata
+pdf2md convert paper.pdf -d high
+
+# Any depth with a local LLM instead of Claude
+pdf2md convert paper.pdf --local
+pdf2md convert paper.pdf -d high --local
+```
 
 ## Direct CLI Usage
 
 ### `pdf2md convert` — Main Conversion
 
 ```bash
-uv run pdf2md convert paper.pdf ./output [OPTIONS]
+pdf2md convert paper.pdf [output_dir] [OPTIONS]
 ```
+
+If `output_dir` is omitted, output goes to the same directory as the PDF.
 
 | Option | Description |
 |--------|-------------|
@@ -311,23 +327,33 @@ uv run pdf2md convert paper.pdf ./output -d high --local
 ## Installation
 
 ```bash
-# Standard install — includes Docling, Claude Agent SDK, and LiteLLM
-pip install paper-to-md
+# Install as a standalone tool (recommended)
+uv tool install paper-to-md
 
 # Pre-download Docling ML models (~500MB, one-time)
 pdf2md download-models
+```
+
+Alternative install methods:
+
+```bash
+# Install into a project
+uv add paper-to-md
+
+# pip works too
+pip install paper-to-md
 
 # Docker microservice dependencies
-pip install paper-to-md[service]
+uv tool install paper-to-md[service]
 
 # Development (pytest + ruff)
-pip install paper-to-md[dev]
+uv pip install paper-to-md[dev]
 ```
 
 ### Requirements
 
 - Python 3.10-3.12
-- [uv](https://docs.astral.sh/uv/) recommended for dependency management
+- [uv](https://docs.astral.sh/uv/) recommended for installation and dependency management
 
 ## Batch Processing
 
