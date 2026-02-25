@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "paper-to-md"
-version = "0.2.0"
+version = "0.2.1"
 description = "Convert academic PDF papers to clean markdown using Docling + AI cleanup"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
