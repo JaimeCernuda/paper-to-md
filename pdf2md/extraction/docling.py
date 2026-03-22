@@ -72,6 +72,27 @@ def extract_with_docling(
     pipeline_options = PdfPipelineOptions()
     pipeline_options.images_scale = images_scale
     pipeline_options.generate_picture_images = generate_pictures
+    # Configure picture descriptions via external VLM API endpoint.
+    # This routes figure understanding to our GPU-powered VLM instead of
+    # Docling's built-in SmolVLM CPU model.
+    import os
+    vlm_host = os.getenv("PDF2MD_VLM_HOST", "")
+    if vlm_host:
+        from docling.datamodel.pipeline_options import PictureDescriptionApiOptions
+        vlm_model = os.getenv("PDF2MD_VLM_MODEL", "qwen3-vl-30b")
+        pipeline_options.enable_remote_services = True
+        pipeline_options.do_picture_description = True
+        pipeline_options.picture_description_options = PictureDescriptionApiOptions(
+            url=f"{vlm_host.rstrip('/').replace('/v1', '')}/v1/chat/completions",
+            params={"model": vlm_model},
+            prompt=(
+                "Describe this scientific figure in detail. "
+                "Identify the type (chart, diagram, flowchart, table, etc.), "
+                "key elements, labels, axes, and any data trends or relationships shown."
+            ),
+            timeout=180,
+            concurrency=1,
+        )
 
     converter = DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}

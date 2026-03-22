@@ -21,6 +21,7 @@ def cleanup_text(content: str) -> str:
     """
     content = _remove_image_comments(content)
     content = _fix_ligatures(content)
+    content = _fix_math_font_garble(content)
     content = _fix_glyph_artifacts(content)
     content = _remove_ocr_artifacts_near_figures(content)
     content = _fix_hyphenated_words(content)
@@ -57,6 +58,60 @@ def _fix_ligatures(content: str) -> str:
 
     for ligature, replacement in ligatures.items():
         content = content.replace(ligature, replacement)
+
+    return content
+
+
+def _fix_math_font_garble(content: str) -> str:
+    """Fix garbled math font characters from PDF extraction.
+
+    PDF math fonts use codepoints in the Mathematical Alphanumeric Symbols
+    block (U+1D400-U+1D7FF). Some extractors truncate these to the BMP,
+    producing Hangul syllables (U+D400-U+D7FF) or other wrong characters.
+    This function maps them back to plain ASCII letters.
+    """
+    # Build mapping: Hangul-range codepoints → intended ASCII letters
+    # Mathematical Italic Capital: U+1D434 (A) → extracted as U+D434
+    # Mathematical Italic Small: U+1D44E (a) → extracted as U+D44E
+    mapping = {}
+
+    # Italic capitals A-Z (U+1D434-U+1D44D → U+D434-D44D)
+    for i in range(26):
+        mapping[chr(0xD434 + i)] = chr(ord("A") + i)
+
+    # Italic smalls a-z (U+1D44E-U+1D467 → U+D44E-D467)
+    for i in range(26):
+        mapping[chr(0xD44E + i)] = chr(ord("a") + i)
+
+    # Bold capitals A-Z (U+1D400-U+1D419 → U+D400-D419)
+    for i in range(26):
+        mapping[chr(0xD400 + i)] = chr(ord("A") + i)
+
+    # Bold smalls a-z (U+1D41A-U+1D433 → U+D41A-D433)
+    for i in range(26):
+        mapping[chr(0xD41A + i)] = chr(ord("a") + i)
+
+    # Script/calligraphic capitals (U+1D49C → U+D49C, etc.)
+    for i in range(26):
+        mapping[chr(0xD49C + i)] = chr(ord("A") + i)
+
+    # Common math symbols that get garbled
+    extra = {
+        "\u210E": "h",  # PLANCK CONSTANT (ℎ)
+        "\u2113": "l",  # SCRIPT SMALL L (ℓ)
+        "\u2102": "C",  # DOUBLE-STRUCK C (ℂ)
+        "\u211D": "R",  # DOUBLE-STRUCK R (ℝ)
+        "\u2115": "N",  # DOUBLE-STRUCK N (ℕ)
+        "\u2124": "Z",  # DOUBLE-STRUCK Z (ℤ)
+    }
+    mapping.update(extra)
+
+    # Fast path: check if any Hangul-range math chars are present
+    if not re.search(r"[\uD400-\uD4FF]|[\u210E\u2113\u2102\u211D\u2115\u2124]", content):
+        return content
+
+    for garbled, fixed in mapping.items():
+        content = content.replace(garbled, fixed)
 
     return content
 

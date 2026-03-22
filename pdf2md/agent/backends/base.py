@@ -52,3 +52,37 @@ class AgentBackend(ABC):
             List of {figure_id, description} dicts
         """
         ...
+
+    async def run_describe_tables(
+        self,
+        tables: list[dict],
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        verbose: bool = False,
+    ) -> list[dict]:
+        """Verify and improve table markdown using VLM.
+
+        Default implementation returns tables unchanged.
+        """
+        return tables
+
+    async def run_synthesis(
+        self,
+        md_path: Path,
+        figures: list[dict],
+        tables: list[dict],
+        equations: list[dict],
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        verbose: bool = False,
+    ) -> str:
+        """Run synthesis pass combining markdown, figures, tables, equations.
+
+        Takes the full markdown text and all enrichment data, produces the
+        final clean markdown with everything integrated.
+
+        Default implementation returns the markdown unchanged.
+        """
+        return md_path.read_text(encoding="utf-8")

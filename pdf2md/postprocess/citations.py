@@ -53,10 +53,20 @@ def process_citations(content: str) -> str:
 
 def _expand_citation_ranges(content: str) -> str:
     """
-    Expand citation ranges like [11]-[14] to individual citations.
+    Expand citation ranges to individual citations.
 
-    [11]-[14] → [11], [12], [13], [14]
+    Handles:
+    - [11]-[14] → [11], [12], [13], [14]
+    - [6-11]    → [6], [7], [8], [9], [10], [11]
+    - [6–11]    → same (en-dash)
+    - [6–\\n11]  → same (line break inside bracket)
     """
+    # First, fix line breaks inside bracket citation ranges: [6–\n11] → [6–11]
+    content = re.sub(
+        r"\[(\d+)\s*[-–—]\s*\n\s*(\d+)\]",
+        r"[\1-\2]",
+        content,
+    )
 
     def expand_range(match: re.Match) -> str:
         start = int(match.group(1))
@@ -68,9 +78,17 @@ def _expand_citation_ranges(content: str) -> str:
         citations = [f"[{i}]" for i in range(start, end + 1)]
         return ", ".join(citations)
 
-    # Match [N]-[M] pattern
-    pattern = r"\[(\d+)\]\s*[-–—]\s*\[(\d+)\]"
-    return re.sub(pattern, expand_range, content)
+    # Match [N]-[M] pattern (two bracket pairs)
+    content = re.sub(
+        r"\[(\d+)\]\s*[-–—]\s*\[(\d+)\]", expand_range, content
+    )
+
+    # Match [N-M] pattern (single bracket pair with dash)
+    content = re.sub(
+        r"\[(\d+)\s*[-–—]\s*(\d+)\]", expand_range, content
+    )
+
+    return content
 
 
 def _link_single_citations(content: str) -> str:

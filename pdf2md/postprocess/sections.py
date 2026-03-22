@@ -115,6 +115,23 @@ def _is_section_title(title: str, following_lines: list[str]) -> bool:
     if len(title) > MAX_TITLE_LENGTH:
         return False
 
+    # Reject titles with garbled unicode (algorithm pseudocode, math symbols)
+    if re.search(r"[\u0080-\uffff]{3,}", title):
+        return False
+
+    # Reject unit-like short titles that are actually table data
+    # e.g., "Hz", "Hours", "Days", "Hand, Chest, Ankle"
+    if len(title.split()) <= 3 and re.search(
+        r"\b(Hz|kHz|MHz|GHz|Hours?|Days?|Weeks?|Months?|Years?|"
+        r"mA|mW|µA|ms|µs|ns|MB|GB|TB|KB)\b",
+        title,
+    ):
+        return False
+
+    # Reject if title is just comma-separated short items (table row data)
+    if ", " in title and len(title) < 40:
+        return False
+
     # Title should not contain certain patterns that indicate it's body text
     # (e.g., multiple sentences, parenthetical asides that are too long)
     if title.count(". ") > 1:  # Multiple sentences
@@ -163,44 +180,69 @@ def _fix_hierarchical_sections(content: str) -> str:
             i += 1
             continue
 
-        # Pattern 1: N.N.N Title on its own line (title ends with period or nothing)
-        # e.g., "3.1.1 Design overview." or "3.1.1 Design overview"
-        section_match = re.match(r"^(\d+(?:\.\d+)+)\s+([A-Z][^.]+?)\.?\s*$", stripped)
+        # Pattern 0: Standalone section number on its own line, title on next
+        # PyMuPDF often extracts "1\nIntroduction" or "2.1\nBackground"
+        # Only match numbers starting with 1-9 (not 0.x decimals)
+        standalone_num = re.match(r"^([1-9]\d*(?:\.\d+)*)\s*$", stripped)
+        if standalone_num and i + 1 < len(lines):
+            next_stripped = lines[i + 1].strip()
+            # Next line should be a capitalized title word(s), no math/garble
+            if (
+                next_stripped
+                and next_stripped[0].isupper()
+                and len(next_stripped) <= MAX_TITLE_LENGTH
+                and ". " not in next_stripped[:40]
+                and not next_stripped[0].isdigit()
+                and not re.search(r"[\u0080-\uffff]{3,}", next_stripped)
+                and _is_section_title(next_stripped, lines[i + 2 : i + 6])
+            ):
+                numbering = standalone_num.group(1)
+                level = _determine_header_level(numbering)
+                header_prefix = "#" * level
+                result.append(f"{header_prefix} {numbering} {next_stripped}")
+                if i + 2 < len(lines) and lines[i + 2].strip():
+                    result.append("")
+                i += 2
+                continue
+
+        # Pattern 1: N Title or N.N.N Title on its own line
+        # e.g., "1 Introduction" or "3.1.1 Design overview."
+        # Requires the number part to start with 1-9 (not 0.x decimals)
+        section_match = re.match(
+            r"^([1-9]\d*(?:\.\d+)*)\s+([A-Z][^.]+?)\.?\s*$", stripped
+        )
 
         if section_match:
             numbering = section_match.group(1)
             title = section_match.group(2).strip()
 
-            # Get following lines for context
             following = lines[i + 1 : i + 5] if i + 1 < len(lines) else []
 
             if _is_section_title(title, following):
                 level = _determine_header_level(numbering)
                 header_prefix = "#" * level
                 result.append(f"{header_prefix} {numbering} {title}")
-                # Add blank line after header if not already there
                 if i + 1 < len(lines) and lines[i + 1].strip():
                     result.append("")
                 i += 1
                 continue
 
         # Pattern 2: N.N.N Title. Body text on same line
-        # e.g., "3.1.1 Design overview. Hermes is designed as a middleware..."
-        # Split into header and body paragraph
-        inline_match = re.match(r"^(\d+(?:\.\d+)+)\s+([A-Z][^.]{2,50})\.\s+(.+)$", stripped)
+        inline_match = re.match(
+            r"^([1-9]\d*(?:\.\d+)+)\s+([A-Z][^.]{2,50})\.\s+(.+)$", stripped
+        )
 
         if inline_match:
             numbering = inline_match.group(1)
             title = inline_match.group(2).strip()
             body = inline_match.group(3).strip()
 
-            # Validate this looks like a section title (short, capitalized)
-            if len(title) <= 60:  # Title should be reasonably short
+            if len(title) <= 60:
                 level = _determine_header_level(numbering)
                 header_prefix = "#" * level
                 result.append(f"{header_prefix} {numbering} {title}")
-                result.append("")  # Blank line after header
-                result.append(body)  # Body text as new paragraph
+                result.append("")
+                result.append(body)
                 i += 1
                 continue
 

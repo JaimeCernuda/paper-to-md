@@ -17,6 +17,8 @@ from dataclasses import dataclass
 DEFAULT_TEXT_MODEL = os.getenv("PDF2MD_TEXT_MODEL", "qwen3-4b")
 DEFAULT_VLM_MODEL = os.getenv("PDF2MD_VLM_MODEL", "qwen3-vl-4b")
 DEFAULT_PROVIDER = os.getenv("PDF2MD_PROVIDER", "lm_studio")
+# Override VLM provider separately from text (e.g. text on lm_studio, VLM on ollama)
+DEFAULT_VLM_PROVIDER = os.getenv("PDF2MD_VLM_PROVIDER", "")
 
 DEFAULT_LM_STUDIO_HOST = os.getenv("LM_STUDIO_HOST", "http://localhost:1234/v1")
 DEFAULT_VLM_HOST = os.getenv("PDF2MD_VLM_HOST", "http://localhost:1234/v1")
@@ -60,22 +62,24 @@ def get_vlm_config(provider: str | None = None, model: str | None = None) -> Pro
     """Get configuration for VLM (vision language model).
 
     Uses PDF2MD_VLM_HOST (separate endpoint) so VLM can run on a different
-    node/port than the text model.
+    node/port than the text model. When PDF2MD_VLM_PROVIDER is set, the VLM
+    uses a different provider type than the text model (e.g. text on lm_studio,
+    VLM on ollama).
     """
-    provider = provider or DEFAULT_PROVIDER
+    vlm_provider = DEFAULT_VLM_PROVIDER or provider or DEFAULT_PROVIDER
     vlm_model = model or DEFAULT_VLM_MODEL
 
-    if provider == "ollama":
+    if vlm_provider == "ollama":
         return ProviderConfig(
             model=f"ollama_chat/{vlm_model}",
             api_base=DEFAULT_OLLAMA_HOST,
         )
-    if provider == "lm_studio":
+    if vlm_provider == "lm_studio":
         return ProviderConfig(
             model=f"lm_studio/{vlm_model}",
             api_base=DEFAULT_VLM_HOST,
         )
-    raise ValueError(f"Unknown provider '{provider}'. Supported: lm_studio, ollama")
+    raise ValueError(f"Unknown VLM provider '{vlm_provider}'. Supported: lm_studio, ollama")
 
 
 def _get_lm_studio_config(model: str | None) -> ProviderConfig:
