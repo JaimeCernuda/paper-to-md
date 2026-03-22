@@ -67,14 +67,48 @@ _MATH_CHARS = set(
     "₀₁₂₃₄₅₆₇₈₉⁰¹²³⁴⁵⁶⁷⁸⁹"
 )
 
-# Minimum fraction of math chars in a line to consider it an equation
-_MATH_CHAR_THRESHOLD = 0.15
-_MIN_MATH_CHARS_ABSOLUTE = 3
+# Minimum fraction of math chars in a line to consider it a display equation
+_MATH_CHAR_THRESHOLD = 0.30
+_MIN_MATH_CHARS_ABSOLUTE = 4
+
+
+def _is_display_equation_line(line: str, prev_line: str, next_line: str) -> bool:
+    """Check if a line is a standalone display equation, not inline math.
+
+    Display equations are on their own line, have high math character density,
+    and are surrounded by blank or short lines (not embedded in paragraphs).
+    """
+    stripped = line.strip()
+    if not stripped:
+        return False
+
+    math_count = sum(1 for c in stripped if c in _MATH_CHARS)
+    if math_count < _MIN_MATH_CHARS_ABSOLUTE:
+        return False
+
+    density = math_count / max(len(stripped), 1)
+
+    # High density: clearly an equation
+    if density >= 0.50:
+        return True
+
+    # Medium density: only if the line is short (not a paragraph with some math)
+    if density >= _MATH_CHAR_THRESHOLD and len(stripped) < 80:
+        # Must not be embedded in a paragraph (prev/next should be blank or short)
+        prev_is_para = len(prev_line.strip()) > 40 and not prev_line.strip().startswith("#")
+        next_is_para = len(next_line.strip()) > 40 and not next_line.strip().startswith("#")
+        if prev_is_para and next_is_para:
+            return False  # inline math within a paragraph
+        return True
+
+    return False
 
 
 def detect_equations(content: str) -> list[dict]:
-    """Detect equation regions in extracted text.
+    """Detect display equation regions in extracted text.
 
+    Only detects equations that appear as standalone display equations
+    (on their own line, not inline math fragments within paragraphs).
     Finds lines with high concentration of math unicode characters
     that represent garbled equation extraction from PDFs.
 
@@ -90,32 +124,33 @@ def detect_equations(content: str) -> list[dict]:
             i += 1
             continue
 
-        math_count = sum(1 for c in line if c in _MATH_CHARS)
+        prev_line = lines[i - 1] if i > 0 else ""
+        next_line = lines[i + 1] if i + 1 < len(lines) else ""
 
-        if math_count >= _MIN_MATH_CHARS_ABSOLUTE and (
-            math_count / max(len(line), 1) >= _MATH_CHAR_THRESHOLD
-        ):
-            # Found start of equation region; extend through consecutive math lines
+        if _is_display_equation_line(line, prev_line, next_line):
             start = i
             eq_lines = [lines[i]]
             i += 1
+            # Extend through consecutive math lines
             while i < len(lines):
-                next_line = lines[i].strip()
-                if not next_line:
+                next_stripped = lines[i].strip()
+                if not next_stripped:
                     i += 1
                     continue
-                next_math = sum(1 for c in next_line if c in _MATH_CHARS)
-                if next_math >= _MIN_MATH_CHARS_ABSOLUTE:
+                after = lines[i + 1] if i + 1 < len(lines) else ""
+                if _is_display_equation_line(next_stripped, eq_lines[-1], after):
                     eq_lines.append(lines[i])
                     i += 1
                 else:
                     break
 
-            equations.append({
-                "line_start": start,
-                "line_end": i - 1,
-                "raw_text": "\n".join(eq_lines),
-            })
+            equations.append(
+                {
+                    "line_start": start,
+                    "line_end": i - 1,
+                    "raw_text": "\n".join(eq_lines),
+                }
+            )
         else:
             i += 1
 
@@ -127,13 +162,9 @@ def detect_equations(content: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 # Pattern: numbered section like "1 Introduction", "2.1 Background", "A NP-Hardness"
-_NUMBERED_SECTION_RE = re.compile(
-    r"^##\s+(\d+(?:\.\d+)*)\s+(.+)$"
-)
+_NUMBERED_SECTION_RE = re.compile(r"^##\s+(\d+(?:\.\d+)*)\s+(.+)$")
 
-_APPENDIX_SECTION_RE = re.compile(
-    r"^##\s+([A-Z])\s+([A-Z].+)$"
-)
+_APPENDIX_SECTION_RE = re.compile(r"^##\s+([A-Z])\s+([A-Z].+)$")
 
 
 def _fix_section_hierarchy(content: str) -> str:
@@ -388,16 +419,18 @@ async def _vlm_call(
     if system:
         messages.append({"role": "system", "content": system})
 
-    messages.append({
-        "role": "user",
-        "content": [
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{image_b64}"},
-            },
-            {"type": "text", "text": prompt},
-        ],
-    })
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_b64}"},
+                },
+                {"type": "text", "text": prompt},
+            ],
+        }
+    )
 
     kwargs: dict = {
         "model": config.model,
@@ -593,9 +626,7 @@ async def _classify_lettered_sections(
         return content
 
 
-async def _reconstruct_equations(
-    equations: list[dict], config, verbose: bool
-) -> list[dict]:
+async def _reconstruct_equations(equations: list[dict], config, verbose: bool) -> list[dict]:
     """Send garbled equation text to LLM for LaTeX reconstruction."""
     if not equations:
         return equations
@@ -780,13 +811,9 @@ class LocalBackend(AgentBackend):
             print(f"  Detected {len(detected_equations)} equation regions")
 
         if detected_equations:
-            detected_equations = await _reconstruct_equations(
-                detected_equations, config, verbose
-            )
+            detected_equations = await _reconstruct_equations(detected_equations, config, verbose)
 
-        all_equations = equations + [
-            e for e in detected_equations if e.get("latex")
-        ]
+        all_equations = equations + [e for e in detected_equations if e.get("latex")]
 
         # ── Step 2: Replace garbled equation text with LaTeX ──────────
         lines = content.split("\n")
@@ -798,7 +825,7 @@ class LocalBackend(AgentBackend):
             start = eq.get("line_start", -1)
             end = eq.get("line_end", start)
             if 0 <= start < len(lines):
-                lines[start:end + 1] = [latex]
+                lines[start : end + 1] = [latex]
 
         content = "\n".join(lines)
 
@@ -819,9 +846,7 @@ class LocalBackend(AgentBackend):
             for line in lines:
                 new_lines.append(line)
                 # After a figure image line, add the VLM description
-                img_match = re.match(
-                    r"!\[Figure\s+(\d+)\]", line
-                )
+                img_match = re.match(r"!\[Figure\s+(\d+)\]", line)
                 if img_match:
                     fid = int(img_match.group(1))
                     if fid in fig_desc_map:
@@ -841,9 +866,7 @@ class LocalBackend(AgentBackend):
                     original_caption = cap_match.group(3).strip()
                     if fid in fig_desc_map:
                         desc = fig_desc_map[fid]
-                        new_lines2.append(
-                            f"*Figure {fid}: {original_caption}*"
-                        )
+                        new_lines2.append(f"*Figure {fid}: {original_caption}*")
                         new_lines2.append("")
                         new_lines2.append(f"> {desc}")
                         continue
@@ -853,7 +876,9 @@ class LocalBackend(AgentBackend):
 
         # ── Step 5: Remove formula-not-decoded placeholders ───────────
         content = re.sub(
-            r"\n*<!-- formula-not-decoded -->\n*", "\n", content,
+            r"\n*<!-- formula-not-decoded -->\n*",
+            "\n",
+            content,
         )
 
         # ── Step 6: LLM cleanup for garbled unicode per section ───────
@@ -873,9 +898,9 @@ class LocalBackend(AgentBackend):
             if has_garble:
                 if verbose:
                     print(
-                        f"    Section {i+1}/{len(sections)}: "
-                        f"{len(section)} chars, cleaning...",
-                        end="", flush=True,
+                        f"    Section {i + 1}/{len(sections)}: {len(section)} chars, cleaning...",
+                        end="",
+                        flush=True,
                     )
                 try:
                     cleaned = await _llm_call(
@@ -928,7 +953,10 @@ class LocalBackend(AgentBackend):
         if all_equations:
             (doc_dir / "equations.json").write_text(
                 json.dumps(
-                    all_equations, indent=2, ensure_ascii=False, default=str,
+                    all_equations,
+                    indent=2,
+                    ensure_ascii=False,
+                    default=str,
                 ),
                 encoding="utf-8",
             )

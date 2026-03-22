@@ -79,14 +79,10 @@ def _expand_citation_ranges(content: str) -> str:
         return ", ".join(citations)
 
     # Match [N]-[M] pattern (two bracket pairs)
-    content = re.sub(
-        r"\[(\d+)\]\s*[-–—]\s*\[(\d+)\]", expand_range, content
-    )
+    content = re.sub(r"\[(\d+)\]\s*[-–—]\s*\[(\d+)\]", expand_range, content)
 
     # Match [N-M] pattern (single bracket pair with dash)
-    content = re.sub(
-        r"\[(\d+)\s*[-–—]\s*(\d+)\]", expand_range, content
-    )
+    content = re.sub(r"\[(\d+)\s*[-–—]\s*(\d+)\]", expand_range, content)
 
     return content
 

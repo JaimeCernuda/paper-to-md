@@ -97,10 +97,10 @@ def _fix_math_font_garble(content: str) -> str:
 
     # Common math symbols that get garbled
     extra = {
-        "\u210E": "h",  # PLANCK CONSTANT (ℎ)
+        "\u210e": "h",  # PLANCK CONSTANT (ℎ)
         "\u2113": "l",  # SCRIPT SMALL L (ℓ)
         "\u2102": "C",  # DOUBLE-STRUCK C (ℂ)
-        "\u211D": "R",  # DOUBLE-STRUCK R (ℝ)
+        "\u211d": "R",  # DOUBLE-STRUCK R (ℝ)
         "\u2115": "N",  # DOUBLE-STRUCK N (ℕ)
         "\u2124": "Z",  # DOUBLE-STRUCK Z (ℤ)
     }
@@ -254,48 +254,117 @@ def _fix_hyphenated_words(content: str) -> str:
     return "\n".join(line for idx, line in enumerate(result) if idx not in to_remove)
 
 
-def _merge_split_paragraphs(content: str) -> str:
-    """Merge paragraphs split by page breaks.
+def _is_structural_line(stripped: str) -> bool:
+    """Check if a line is structural (header, list, table, figure, caption)."""
+    if not stripped:
+        return True
+    if stripped.startswith("#"):
+        return True
+    if stripped.startswith("!["):
+        return True
+    if stripped.startswith("|"):
+        return True
+    if re.match(r"^[-*]\s", stripped):
+        return True
+    if re.match(r"^\d+[.)]\s", stripped):
+        return True
+    if re.match(r"^(Figure|Fig\.?|Table)\s+\d+", stripped, re.IGNORECASE):
+        return True
+    if re.match(r"^<a\s+id=", stripped):
+        return True
+    if re.match(r"^\[\[?\d+\]", stripped):
+        return True
+    if stripped.startswith("```"):
+        return True
+    if stripped.startswith(">"):
+        return True
+    # Bullet-like indicators (ACM CCS, keywords markers)
+    if stripped.startswith("•"):
+        return True
+    return False
 
-    Detects: line ending without sentence termination (.!?:;)
-    followed by blank line, followed by continuation (lowercase start
-    or common continuation words like parenthetical).
+
+def _merge_split_paragraphs(content: str) -> str:
+    """Join column-width line breaks into proper markdown paragraphs.
+
+    PyMuPDF preserves ~60-char column-width line breaks. This function joins
+    consecutive non-blank lines that belong to the same paragraph. It also
+    merges across single blank lines when the text clearly continues
+    (page-break splits).
+
+    A line continues the previous paragraph when:
+    - The previous line does NOT end with sentence-terminal punctuation
+    - The current line starts with a lowercase letter or continues mid-thought
+    - Neither line is structural (header, list, table, figure, caption, etc.)
     """
     lines = content.split("\n")
     result: list[str] = []
-    i = 0
+    in_code_fence = False
 
+    i = 0
     while i < len(lines):
         line = lines[i]
+        stripped = line.strip()
 
-        if (
-            i + 2 < len(lines)
-            and line.strip()
-            and not line.strip().startswith("#")
-            and not line.strip().startswith("![")
-            and not line.strip().startswith("-")
-            and not line.strip().startswith("*")
-            and not line.strip().startswith("|")
-            and not re.match(r"^\d+[.)]\s", line.strip())
-            and not re.search(r'[.!?:;"\)>]$', line.rstrip())
-            and lines[i + 1].strip() == ""
-            and lines[i + 2].strip()
-            and not lines[i + 2].strip().startswith("#")
-            and not lines[i + 2].strip().startswith("![")
-            and not lines[i + 2].strip().startswith("-")
-            and not lines[i + 2].strip().startswith("*")
-            and not lines[i + 2].strip().startswith("|")
-            and not re.match(r"^\d+[.)]\s", lines[i + 2].strip())
-            and not re.match(r"^(Fig|Figure|Table)\b", lines[i + 2].strip())
-        ):
-            next_line = lines[i + 2].strip()
-            if next_line and (next_line[0].islower() or next_line.startswith("(")):
-                result.append(line.rstrip() + " " + next_line)
-                i += 3
-                continue
+        # Track code fences
+        if stripped.startswith("```"):
+            in_code_fence = not in_code_fence
+            result.append(line)
+            i += 1
+            continue
 
-        result.append(line)
+        if in_code_fence:
+            result.append(line)
+            i += 1
+            continue
+
+        # Blank or structural lines pass through unchanged
+        if not stripped or _is_structural_line(stripped):
+            result.append(line)
+            i += 1
+            continue
+
+        # Start building a paragraph by joining continuation lines
+        para_parts = [stripped]
         i += 1
+
+        while i < len(lines):
+            next_stripped = lines[i].strip()
+
+            # Blank line: check for page-break merge (blank + lowercase continuation)
+            if not next_stripped:
+                if (
+                    i + 1 < len(lines)
+                    and lines[i + 1].strip()
+                    and not _is_structural_line(lines[i + 1].strip())
+                    and not re.search(r'[.!?:;"\)>]$', para_parts[-1])
+                    and (lines[i + 1].strip()[0].islower() or lines[i + 1].strip().startswith("("))
+                ):
+                    # Skip the blank line and merge the continuation
+                    i += 1
+                    continue
+                break
+
+            # Stop at structural lines
+            if _is_structural_line(next_stripped):
+                break
+
+            # Stop if previous part ended with terminal punctuation AND
+            # next line starts with uppercase AND the previous fragment
+            # is short (a real paragraph break, not just a mid-sentence period)
+            prev_part = para_parts[-1]
+            if (
+                re.search(r"[.!?:;]$", prev_part)
+                and next_stripped[0].isupper()
+                and len(prev_part) < 50
+            ):
+                break
+
+            # This line continues the paragraph
+            para_parts.append(next_stripped)
+            i += 1
+
+        result.append(" ".join(para_parts))
 
     return "\n".join(result)
 

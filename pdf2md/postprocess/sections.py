@@ -40,6 +40,7 @@ def process_sections(content: str) -> str:
     """
     content = _fix_abstract_header(content)
     content = _fix_index_terms_header(content)
+    content = _fix_unnumbered_sections(content)
     content = _fix_hierarchical_sections(content)
     # Lettered sections removed - handled by agent (see cleanup.py)
     content = _fix_numbered_bullet_subsections(content)
@@ -52,11 +53,23 @@ def _fix_abstract_header(content: str) -> str:
 
     "Abstract -Modern HPC..." → "## Abstract\\n\\nModern HPC..."
     "Abstract-Modern HPC..." → "## Abstract\\n\\nModern HPC..."
+    "Abstract" (standalone) → "## Abstract"
     """
-    # Pattern: Abstract followed by dash (with optional spaces) then text
+    # Pattern 1: Abstract followed by dash then text
     pattern = r"^(#+\s*)?Abstract\s*[-–—]\s*"
-    replacement = "## Abstract\n\n"
-    return re.sub(pattern, replacement, content, count=1, flags=re.MULTILINE | re.IGNORECASE)
+    content = re.sub(
+        pattern, "## Abstract\n\n", content, count=1, flags=re.MULTILINE | re.IGNORECASE
+    )
+
+    # Pattern 2: Standalone "Abstract" on its own line (not already a header)
+    content = re.sub(
+        r"^(?!#)Abstract\s*$",
+        "## Abstract",
+        content,
+        count=1,
+        flags=re.MULTILINE | re.IGNORECASE,
+    )
+    return content
 
 
 def _fix_index_terms_header(content: str) -> str:
@@ -68,6 +81,168 @@ def _fix_index_terms_header(content: str) -> str:
     pattern = r"^(#+\s*)?Index Terms\s*[-–—]\s*"
     replacement = "## Index Terms\n\n"
     return re.sub(pattern, replacement, content, count=1, flags=re.MULTILINE | re.IGNORECASE)
+
+
+# Known academic section names that can appear without numbering
+_UNNUMBERED_SECTIONS = {
+    "abstract",
+    "introduction",
+    "background",
+    "related work",
+    "methodology",
+    "methods",
+    "method",
+    "approach",
+    "design",
+    "implementation",
+    "architecture",
+    "system overview",
+    "system design",
+    "evaluation",
+    "experiments",
+    "experimental setup",
+    "experimental results",
+    "results",
+    "analysis",
+    "discussion",
+    "limitations",
+    "conclusion",
+    "conclusions",
+    "future work",
+    "acknowledgments",
+    "acknowledgements",
+    "references",
+    "appendix",
+    "overview",
+    "motivation",
+    "problem statement",
+    "problem formulation",
+    "preliminaries",
+    "contributions",
+    "ccs concepts",
+    "keywords",
+    "index terms",
+}
+
+
+def _fix_unnumbered_sections(content: str) -> str:
+    """Convert standalone known section names to markdown headers.
+
+    Handles papers where section titles appear on their own line without
+    numbering, common in ACM-format anonymous submissions.
+    """
+    lines = content.split("\n")
+    result = []
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Skip already-processed headers
+        if stripped.startswith("#"):
+            result.append(line)
+            continue
+
+        # Check if this line is a known section name
+        normalized = stripped.lower().rstrip(".:")
+        if normalized in _UNNUMBERED_SECTIONS and len(stripped) < 40:
+            # Verify it's on its own line (not part of a sentence)
+            # Check previous line is empty or structural
+            prev_ok = i == 0 or not lines[i - 1].strip() or lines[i - 1].strip().startswith("#")
+            # Check next line exists and has content (section must have body)
+            next_ok = i + 1 < len(lines)
+            if prev_ok and next_ok:
+                result.append(f"## {stripped}")
+                # Add blank line after header if next line has content
+                if i + 1 < len(lines) and lines[i + 1].strip():
+                    result.append("")
+                continue
+
+        result.append(line)
+
+    return "\n".join(result)
+
+
+def _is_title_like(text: str) -> bool:
+    """Check if text looks like a section title rather than table data or body text.
+
+    Section titles are short (1-8 words), mostly capitalized, and do not contain
+    units, commas separating items, parenthetical expressions, or table caption
+    prefixes.
+    """
+    words = text.split()
+    if len(words) > 8:
+        return False
+
+    # Reject table captions
+    if re.match(r"^Table\s+\d+", text, re.IGNORECASE):
+        return False
+
+    # Reject lines with units (table data)
+    if re.search(
+        r"\b(Hz|kHz|MHz|GHz|Hours?|Days?|Weeks?|Months?|Years?|Seconds?|"
+        r"mA|mW|µA|ms|µs|ns|MB|GB|TB|KB|Bytes?)\b",
+        text,
+    ):
+        return False
+
+    # Reject comma-separated items (table rows, lists)
+    if "," in text:
+        return False
+
+    # Reject lines with parentheses (inline math, citations)
+    if "(" in text or ")" in text:
+        return False
+
+    # At least one word should start with uppercase
+    upper_words = sum(1 for w in words if w and w[0].isupper())
+    if upper_words == 0:
+        return False
+
+    return True
+
+
+def _has_following_paragraph(following_lines: list[str]) -> bool:
+    """Check that the following lines look like body text, not table data.
+
+    Section headers are followed by paragraph text. Table cells are followed
+    by more short lines with standalone numbers. Only examines the first
+    continuous block of text (stops at blank lines) to avoid looking across
+    section boundaries.
+    """
+    # Collect the first continuous block of non-empty lines (skip leading blanks)
+    # Stop at blank lines, figure/table captions, and structural markers
+    first_block: list[str] = []
+    started = False
+    for ln in following_lines:
+        stripped = ln.strip()
+        if not stripped:
+            if started:
+                break  # end of first block
+            continue
+        # Stop at figure/table captions and structural markers
+        if re.match(r"^(Figure|Fig\.?|Table)\s+\d+", stripped, re.IGNORECASE):
+            break
+        if stripped.startswith("#") or stripped.startswith("!["):
+            break
+        started = True
+        first_block.append(stripped)
+
+    if not first_block:
+        return True  # no following content — allow it
+
+    # If any line in the first block is long, it's paragraph text
+    if any(len(ln) > 50 for ln in first_block):
+        return True
+
+    # If a standalone number appears, it's table data
+    if any(ln.isdigit() for ln in first_block[:3]):
+        return False
+
+    # Multiple consecutive short lines in the same block suggest table data
+    if len(first_block) >= 3 and all(len(ln) < 40 for ln in first_block[:3]):
+        return False
+
+    return True
 
 
 def _determine_header_level(numbering: str) -> int:
@@ -185,8 +360,21 @@ def _fix_hierarchical_sections(content: str) -> str:
         # Only match numbers starting with 1-9 (not 0.x decimals)
         standalone_num = re.match(r"^([1-9]\d*(?:\.\d+)*)\s*$", stripped)
         if standalone_num and i + 1 < len(lines):
+            numbering_p0 = standalone_num.group(1)
+            top_level_p0 = int(numbering_p0.split(".")[0])
+
+            # Reject unreasonable numbers and decimals like "1.0"
+            if top_level_p0 > 20 or ("." in numbering_p0 and re.match(r"^\d+\.0+$", numbering_p0)):
+                result.append(line)
+                i += 1
+                continue
+
             next_stripped = lines[i + 1].strip()
-            # Next line should be a capitalized title word(s), no math/garble
+            # Next line must look like a section title:
+            # - Starts with uppercase letter
+            # - 1-8 words, mostly capitalized (title case or ALL CAPS)
+            # - No commas, parentheses, math symbols, or units
+            # - Not a table caption ("Table N:")
             if (
                 next_stripped
                 and next_stripped[0].isupper()
@@ -194,7 +382,9 @@ def _fix_hierarchical_sections(content: str) -> str:
                 and ". " not in next_stripped[:40]
                 and not next_stripped[0].isdigit()
                 and not re.search(r"[\u0080-\uffff]{3,}", next_stripped)
+                and _is_title_like(next_stripped)
                 and _is_section_title(next_stripped, lines[i + 2 : i + 6])
+                and _has_following_paragraph(lines[i + 2 : i + 8])
             ):
                 numbering = standalone_num.group(1)
                 level = _determine_header_level(numbering)
@@ -208,17 +398,32 @@ def _fix_hierarchical_sections(content: str) -> str:
         # Pattern 1: N Title or N.N.N Title on its own line
         # e.g., "1 Introduction" or "3.1.1 Design overview."
         # Requires the number part to start with 1-9 (not 0.x decimals)
-        section_match = re.match(
-            r"^([1-9]\d*(?:\.\d+)*)\s+([A-Z][^.]+?)\.?\s*$", stripped
-        )
+        section_match = re.match(r"^([1-9]\d*(?:\.\d+)*)\s+([A-Z][^.]+?)\.?\s*$", stripped)
 
         if section_match:
             numbering = section_match.group(1)
             title = section_match.group(2).strip()
 
+            # Reject unreasonable section numbers
+            top_level = int(numbering.split(".")[0])
+            if top_level > 20:
+                result.append(line)
+                i += 1
+                continue
+
+            # Reject decimal numbers like "1.0" or "7.00" (not section numbering)
+            if "." in numbering and re.match(r"^\d+\.0+$", numbering):
+                result.append(line)
+                i += 1
+                continue
+
             following = lines[i + 1 : i + 5] if i + 1 < len(lines) else []
 
-            if _is_section_title(title, following):
+            if (
+                _is_section_title(title, following)
+                and _is_title_like(title)
+                and _has_following_paragraph(lines[i + 1 : i + 8])
+            ):
                 level = _determine_header_level(numbering)
                 header_prefix = "#" * level
                 result.append(f"{header_prefix} {numbering} {title}")
@@ -228,9 +433,7 @@ def _fix_hierarchical_sections(content: str) -> str:
                 continue
 
         # Pattern 2: N.N.N Title. Body text on same line
-        inline_match = re.match(
-            r"^([1-9]\d*(?:\.\d+)+)\s+([A-Z][^.]{2,50})\.\s+(.+)$", stripped
-        )
+        inline_match = re.match(r"^([1-9]\d*(?:\.\d+)+)\s+([A-Z][^.]{2,50})\.\s+(.+)$", stripped)
 
         if inline_match:
             numbering = inline_match.group(1)

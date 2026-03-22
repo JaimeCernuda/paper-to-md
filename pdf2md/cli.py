@@ -309,7 +309,10 @@ def convert(
 
             figure_results = _run_async(
                 backend_obj.run_describe_figures(
-                    img_dir, provider=provider, model=vlm_model, verbose=True,
+                    img_dir,
+                    provider=provider,
+                    model=vlm_model,
+                    verbose=True,
                 )
             )
             described = sum(1 for r in figure_results if r.get("description"))

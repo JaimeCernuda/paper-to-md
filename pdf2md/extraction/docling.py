@@ -76,9 +76,11 @@ def extract_with_docling(
     # This routes figure understanding to our GPU-powered VLM instead of
     # Docling's built-in SmolVLM CPU model.
     import os
+
     vlm_host = os.getenv("PDF2MD_VLM_HOST", "")
     if vlm_host:
         from docling.datamodel.pipeline_options import PictureDescriptionApiOptions
+
         vlm_model = os.getenv("PDF2MD_VLM_MODEL", "qwen3-vl-30b")
         pipeline_options.enable_remote_services = True
         pipeline_options.do_picture_description = True
