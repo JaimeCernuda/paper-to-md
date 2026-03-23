@@ -264,9 +264,9 @@ def convert(
         console.print(f"[{step}/{total_steps}] Post-processing (rule-based)...")
         content = md_path.read_text(encoding="utf-8")
         image_files = [img.name for img in images]
-        processed = process_markdown(content, image_files)
+        processed = process_markdown(content, image_files, tables=tables)
         md_path.write_text(processed, encoding="utf-8")
-        console.print("      Applied: citations, sections, figures, bibliography")
+        console.print("      Applied: citations, sections, figures, tables, bibliography")
     else:
         console.print(f"[{step}/{total_steps}] Post-processing... [dim]skipped (--raw)[/dim]")
 

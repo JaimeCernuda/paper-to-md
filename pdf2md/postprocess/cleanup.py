@@ -26,6 +26,7 @@ def cleanup_text(content: str) -> str:
     content = _remove_ocr_artifacts_near_figures(content)
     content = _fix_hyphenated_words(content)
     content = _merge_split_paragraphs(content)
+    content = _fix_inline_hyphen_breaks(content)
     content = _fix_excessive_blank_lines(content)
     content = _fix_trailing_whitespace(content)
     return content
@@ -367,6 +368,25 @@ def _merge_split_paragraphs(content: str) -> str:
         result.append(" ".join(para_parts))
 
     return "\n".join(result)
+
+
+def _fix_inline_hyphen_breaks(content: str) -> str:
+    """Fix residual hyphen breaks within reflowed paragraphs.
+
+    After paragraph reflow, some hyphen breaks survive as "word- continuation"
+    within a single line (e.g., "Con- versely"). This pass joins them when
+    the continuation starts with a lowercase letter.
+
+    Preserves legitimate compound words like "error-bounded" and
+    "high-performance" where both parts are complete words.
+    """
+    # Match "word- continuation" where continuation is lowercase
+    # But NOT "word-word" (no space, already joined compound)
+    return re.sub(
+        r"(\w)- ([a-z])",
+        r"\1\2",
+        content,
+    )
 
 
 def _fix_excessive_blank_lines(content: str) -> str:

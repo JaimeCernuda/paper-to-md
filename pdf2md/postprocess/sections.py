@@ -122,6 +122,18 @@ _UNNUMBERED_SECTIONS = {
     "ccs concepts",
     "keywords",
     "index terms",
+    "background and related work",
+    "research overview",
+    "related work and background",
+    "system architecture",
+    "experimental evaluation",
+    "performance evaluation",
+    "implementation and evaluation",
+    "problem definition",
+    "threat model",
+    "use cases",
+    "case study",
+    "case studies",
 }
 
 
@@ -129,7 +141,9 @@ def _fix_unnumbered_sections(content: str) -> str:
     """Convert standalone known section names to markdown headers.
 
     Handles papers where section titles appear on their own line without
-    numbering, common in ACM-format anonymous submissions.
+    numbering, common in ACM-format anonymous submissions. Also detects
+    section titles merged into paragraph starts after reflow (e.g.,
+    "Background and Related Work In this section...").
     """
     lines = content.split("\n")
     result = []
@@ -142,24 +156,69 @@ def _fix_unnumbered_sections(content: str) -> str:
             result.append(line)
             continue
 
-        # Check if this line is a known section name
+        # Check if this line is a known section name (standalone)
         normalized = stripped.lower().rstrip(".:")
-        if normalized in _UNNUMBERED_SECTIONS and len(stripped) < 40:
+        if normalized in _UNNUMBERED_SECTIONS and len(stripped) < 50:
             # Verify it's on its own line (not part of a sentence)
-            # Check previous line is empty or structural
-            prev_ok = i == 0 or not lines[i - 1].strip() or lines[i - 1].strip().startswith("#")
-            # Check next line exists and has content (section must have body)
+            prev_line = lines[i - 1].strip() if i > 0 else ""
+            prev_ok = (
+                i == 0
+                or not prev_line
+                or prev_line.startswith("#")
+                # Multi-word section names (2+ words) are specific enough
+                # to be safe even without a blank preceding line, as long
+                # as the previous line ends a sentence.
+                or (len(normalized.split()) >= 2 and re.search(r"[.!?]$", prev_line))
+            )
             next_ok = i + 1 < len(lines)
             if prev_ok and next_ok:
                 result.append(f"## {stripped}")
-                # Add blank line after header if next line has content
                 if i + 1 < len(lines) and lines[i + 1].strip():
                     result.append("")
+                continue
+
+        # Check if line STARTS with a known section title merged into body text.
+        # After reflow, "Background and Related Work In this section..." becomes
+        # one line. Split it into a header + paragraph.
+        split_line = _try_split_merged_section(stripped)
+        if split_line:
+            title, body = split_line
+            prev_ok = i == 0 or not lines[i - 1].strip() or lines[i - 1].strip().startswith("#")
+            if prev_ok:
+                result.append(f"## {title}")
+                result.append("")
+                result.append(body)
                 continue
 
         result.append(line)
 
     return "\n".join(result)
+
+
+def _try_split_merged_section(text: str) -> tuple[str, str] | None:
+    """Try to split a line where a section title merged into body text.
+
+    Checks if the line starts with a known multi-word section title
+    followed by body text. Returns (title, body) or None.
+    """
+    text_lower = text.lower()
+
+    # Sort by length descending so longer titles match first
+    # ("Background and Related Work" before "Background")
+    for section_name in sorted(_UNNUMBERED_SECTIONS, key=len, reverse=True):
+        if len(section_name) < 8:
+            continue  # Skip short names that could match mid-sentence
+
+        if text_lower.startswith(section_name):
+            rest = text[len(section_name) :]
+            # The body must start with a space and then text
+            if rest and rest[0] in " .":
+                body = rest.lstrip(". ")
+                if body and len(body) > 20:
+                    title = text[: len(section_name)]
+                    return title, body
+
+    return None
 
 
 def _is_title_like(text: str) -> bool:
@@ -375,6 +434,21 @@ def _fix_hierarchical_sections(content: str) -> str:
             # - 1-8 words, mostly capitalized (title case or ALL CAPS)
             # - No commas, parentheses, math symbols, or units
             # - Not a table caption ("Table N:")
+            # Check if next line has "Title. Body text..." that needs splitting
+            title_body = re.match(r"^([A-Z][^.]{2,50})\.\s+(.+)$", next_stripped)
+            if title_body and len(title_body.group(1)) <= 60:
+                # Split: title goes in header, body stays as paragraph
+                title_part = title_body.group(1).strip()
+                body_part = title_body.group(2).strip()
+                numbering = standalone_num.group(1)
+                level = _determine_header_level(numbering)
+                header_prefix = "#" * level
+                result.append(f"{header_prefix} {numbering} {title_part}")
+                result.append("")
+                result.append(body_part)
+                i += 2
+                continue
+
             if (
                 next_stripped
                 and next_stripped[0].isupper()

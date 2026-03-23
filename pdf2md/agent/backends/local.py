@@ -201,6 +201,35 @@ def _fix_section_hierarchy(content: str) -> str:
     return "\n".join(result)
 
 
+def _deduplicate_paragraphs(content: str) -> str:
+    """Remove duplicate paragraphs from the document.
+
+    The synthesis pass sometimes duplicates content (e.g., a figure
+    analysis paragraph appears at both its natural position and in a
+    later section). Paragraphs longer than 100 characters that appear
+    more than once are reduced to the first occurrence.
+    """
+    blocks = content.split("\n\n")
+    seen: set[str] = set()
+    result: list[str] = []
+
+    for block in blocks:
+        stripped = block.strip()
+        # Only deduplicate substantial prose paragraphs
+        if len(stripped) < 100 or stripped.startswith("#") or stripped.startswith("|"):
+            result.append(block)
+            continue
+
+        # Normalize whitespace for comparison
+        normalized = " ".join(stripped.split())
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(block)
+
+    return "\n\n".join(result)
+
+
 def _split_into_sections(content: str) -> list[str]:
     """Split markdown content into sections at ## boundaries.
 
@@ -854,23 +883,18 @@ class LocalBackend(AgentBackend):
                         # (from postprocess). Enhance it with VLM desc.
                         pass  # Description will be on the caption line
 
-            # Also enhance existing caption lines
+            # Add VLM descriptions as HTML comments after figure image lines
+            # so they're invisible in rendered markdown but parseable by code.
+            # The figures.json sidecar remains the canonical store.
             new_lines2 = []
             for line in new_lines:
-                cap_match = re.match(
-                    r"^(Figure|Fig\.?)\s+(\d+)\s*[:.](.*)$",
-                    line.strip(),
-                )
-                if cap_match:
-                    fid = int(cap_match.group(2))
-                    original_caption = cap_match.group(3).strip()
-                    if fid in fig_desc_map:
-                        desc = fig_desc_map[fid]
-                        new_lines2.append(f"*Figure {fid}: {original_caption}*")
-                        new_lines2.append("")
-                        new_lines2.append(f"> {desc}")
-                        continue
                 new_lines2.append(line)
+                img_match2 = re.match(r"!\[Figure\s+(\d+)\]", line)
+                if img_match2:
+                    fid = int(img_match2.group(1))
+                    if fid in fig_desc_map:
+                        desc = fig_desc_map[fid].replace("-->", "—>")
+                        new_lines2.append(f"<!-- VLM: {desc} -->")
 
             content = "\n".join(new_lines2)
 
@@ -929,7 +953,10 @@ class LocalBackend(AgentBackend):
 
         content = "\n\n".join(cleaned_sections)
 
-        # ── Step 7: Final cleanup passes ──────────────────────────────
+        # ── Step 7: Deduplicate paragraphs ────────────────────────────
+        content = _deduplicate_paragraphs(content)
+
+        # ── Step 8: Final cleanup passes ──────────────────────────────
         # Collapse excessive blank lines
         content = re.sub(r"\n{4,}", "\n\n\n", content)
         # Strip trailing whitespace
