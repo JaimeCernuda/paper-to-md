@@ -14,16 +14,18 @@ def cleanup_text(content: str) -> str:
     2. Fix ligatures (fi, fl, ff, etc.)
     3. Fix GLYPH<N> artifacts from Docling
     4. Remove OCR-extracted garbage near figure embeds
-    5. Fix hyphenated words split at line endings
-    6. Merge paragraphs split by page breaks
-    7. Collapse excessive blank lines
-    8. Strip trailing whitespace
+    5. Strip copyright boilerplate (ACM/IEEE)
+    6. Fix hyphenated words split at line endings
+    7. Merge paragraphs split by page breaks
+    8. Collapse excessive blank lines
+    9. Strip trailing whitespace
     """
     content = _remove_image_comments(content)
     content = _fix_ligatures(content)
     content = _fix_math_font_garble(content)
     content = _fix_glyph_artifacts(content)
     content = _remove_ocr_artifacts_near_figures(content)
+    content = _strip_copyright_boilerplate(content)
     content = _fix_hyphenated_words(content)
     content = _merge_split_paragraphs(content)
     content = _fix_inline_hyphen_breaks(content)
@@ -183,6 +185,66 @@ def _remove_ocr_artifacts_near_figures(content: str) -> str:
                     to_remove.add(k)
 
     return "\n".join(line for i, line in enumerate(lines) if i not in to_remove)
+
+
+def _strip_copyright_boilerplate(content: str) -> str:
+    """Remove ACM/IEEE copyright boilerplate that wastes reviewer tokens.
+
+    Strips patterns like:
+    - "Permission to make digital or hard copies..." through DOI line
+    - "ACM Reference Format:" blocks
+    - "ACM ISBN..." lines
+    - IEEE copyright notices
+    """
+    # ACM Reference Format block (must run before copyright block
+    # because both can appear on the same line)
+    content = re.sub(
+        r"ACM Reference [Ff]ormat:\s*"
+        r".*?"
+        r"https?://doi\.org/\S+",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+
+    # ACM copyright block: "Permission to make..." through trailing DOI
+    content = re.sub(
+        r"Permission to make digital or hard copies"
+        r".*?"
+        r"https?://doi\.org/\S+",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+
+    # Fallback for copyright blocks ending with ISBN instead of DOI
+    content = re.sub(
+        r"Permission to make digital or hard copies"
+        r".*?"
+        r"ACM ISBN \S+",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+
+    # IEEE copyright notice
+    content = re.sub(
+        r"(?:©|Copyright)\s*\d{4}\s*IEEE\.?\s*"
+        r"(?:Personal use.*?permitted\.?\s*)?",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+
+    # Standalone DOI lines (orphaned after stripping)
+    content = re.sub(
+        r"^\s*https?://doi\.org/\S+\s*$",
+        "",
+        content,
+        flags=re.MULTILINE,
+    )
+
+    return content
 
 
 def _fix_hyphenated_words(content: str) -> str:

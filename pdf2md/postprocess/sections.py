@@ -436,7 +436,11 @@ def _fix_hierarchical_sections(content: str) -> str:
             # - Not a table caption ("Table N:")
             # Check if next line has "Title. Body text..." that needs splitting
             title_body = re.match(r"^([A-Z][^.]{2,50})\.\s+(.+)$", next_stripped)
-            if title_body and len(title_body.group(1)) <= 60:
+            if (
+                title_body
+                and len(title_body.group(1)) <= 60
+                and _is_title_like(title_body.group(1).strip())
+            ):
                 # Split: title goes in header, body stays as paragraph
                 title_part = title_body.group(1).strip()
                 body_part = title_body.group(2).strip()

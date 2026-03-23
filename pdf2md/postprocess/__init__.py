@@ -1,5 +1,6 @@
 """Deterministic post-processing for extracted markdown."""
 
+from pdf2md.postprocess.algorithms import process_algorithms
 from pdf2md.postprocess.bibliography import process_bibliography
 from pdf2md.postprocess.citations import process_citations
 from pdf2md.postprocess.cleanup import cleanup_text
@@ -25,19 +26,22 @@ def process_markdown(
         Processed markdown content
     """
     # Order matters: sections first, then citations, then figures, then tables,
-    # then bibliography, then cleanup (which includes paragraph reflow)
+    # then bibliography, then algorithms (before cleanup so code fences
+    # protect pseudocode from paragraph reflow), then cleanup.
     content = process_sections(content)
     content = process_citations(content)
     content = process_figures(content, images or [])
     if tables:
         content = process_tables(content, tables)
     content = process_bibliography(content)
+    content = process_algorithms(content)
     content = cleanup_text(content)
     return content
 
 
 __all__ = [
     "process_markdown",
+    "process_algorithms",
     "process_citations",
     "process_sections",
     "process_figures",
