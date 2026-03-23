@@ -24,13 +24,19 @@ _FIGURE_CAPTION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_TABLE_CAPTION_RE = re.compile(
+    r"Table\s+\d+\s*[:.]\s",
+    re.IGNORECASE,
+)
+
+# Section headers like "3.1 Problem Formulation"
+_SECTION_HEADER_RE = re.compile(r"^\d+(\.\d+)*\s+[A-Z]")
+
 # Minimum figure region height in PDF points (skip if too thin)
 _MIN_FIGURE_HEIGHT = 20
 
-# Short text blocks inside chart areas (axis labels, annotations)
-# are identified by their height and character count
-_ANNOTATION_MAX_HEIGHT = 15  # points
-_ANNOTATION_MAX_CHARS = 40
+# Near-white pixel threshold for whitespace trimming
+_WHITE_THRESHOLD = 245
 
 
 # Common academic section names (case-insensitive matching)
@@ -87,6 +93,81 @@ def _looks_like_section_title(text: str) -> bool:
 
     # Only match against known section names
     return text.lower().rstrip(".:") in _KNOWN_SECTION_NAMES
+
+
+def _block_text(block: dict) -> str:
+    """Extract all text from a text block."""
+    parts = []
+    for line in block.get("lines", []):
+        for span in line.get("spans", []):
+            parts.append(span.get("text", ""))
+    return "".join(parts).strip()
+
+
+def _detect_content_margins(doc: fitz.Document) -> tuple[float, float]:
+    """Find x-bounds of body text content, excluding line number margins.
+
+    Scans multi-line wide text blocks across pages to find where body
+    text starts and ends horizontally. Line numbers sit outside these
+    bounds and get excluded from figure crop regions.
+    """
+    left_edges: list[float] = []
+    right_edges: list[float] = []
+
+    for page_num in range(min(len(doc), 10)):
+        page = doc[page_num]
+        blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
+        for block in blocks:
+            if block["type"] != 0:
+                continue
+            bbox = block["bbox"]
+            width = bbox[2] - bbox[0]
+            height = bbox[3] - bbox[1]
+            # Only consider multi-line body-text-like blocks
+            if width > page.rect.width * 0.25 and height > 15:
+                left_edges.append(bbox[0])
+                right_edges.append(bbox[2])
+
+    if not left_edges:
+        page = doc[0]
+        return page.rect.x0 + 30, page.rect.x1 - 30
+
+    return min(left_edges), max(right_edges)
+
+
+def _is_body_text_block(block: dict, col_width: float) -> bool:
+    """Identify body text paragraphs by width, height, and text structure.
+
+    Body text spans most of the column width and wraps across multiple
+    lines. This distinguishes it from figure-internal labels like axis
+    labels, legends, and data annotations, which are narrower or shorter.
+    """
+    bbox = block["bbox"]
+    width = bbox[2] - bbox[0]
+    height = bbox[3] - bbox[1]
+    text = _block_text(block)
+
+    if not text:
+        return False
+
+    # Body text has words separated by spaces
+    if " " not in text:
+        return False
+
+    # Must be reasonably wide relative to column
+    if width < col_width * 0.4:
+        return False
+
+    # Multi-line blocks (>= ~2 lines at 9-10pt each) are body text
+    if height >= 18:
+        return True
+
+    # Wide single-line blocks that are section headers
+    if height >= 9 and width >= col_width * 0.5:
+        if _SECTION_HEADER_RE.match(text) or _looks_like_section_title(text):
+            return True
+
+    return False
 
 
 def _strip_line_numbers(pages_text: list[str]) -> list[str]:
@@ -235,58 +316,75 @@ def _deduplicate_headers(pages_text: list[str]) -> list[str]:
     return result
 
 
-def _find_figure_regions(doc: fitz.Document) -> list[dict]:
-    """Locate figure regions by searching for caption text on each page.
+def _find_figure_regions(
+    doc: fitz.Document,
+    content_margins: tuple[float, float],
+) -> list[dict]:
+    """Locate figure regions by caption position and body text boundaries.
 
-    Uses page.search_for() to find the exact position of each
-    "Figure N:" caption, then determines the figure region above it
-    by looking at the gap between text lines.
+    Uses the full caption text block bbox (not just the "Figure N:" prefix)
+    for accurate column vs full-width detection. Positively identifies body
+    text paragraphs (by width and height) to determine where figures begin.
+    Figure-internal elements like axis labels, legends, and data annotations
+    are inherently excluded because they fail the body text checks.
     """
+    content_left, content_right = content_margins
     figures: list[dict] = []
     seen_ids: set[int] = set()
 
     for page_num in range(len(doc)):
         page = doc[page_num]
         page_rect = page.rect
-        text = page.get_text("text")
 
-        # Find all caption matches in the page text
-        for m in _FIGURE_CAPTION_RE.finditer(text):
+        # Get all text blocks once per page
+        blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
+
+        # Find figure captions directly from text blocks so we get the
+        # full block bbox (not just the short "Figure N:" prefix).
+        for caption_block in blocks:
+            if caption_block["type"] != 0:
+                continue
+
+            caption_txt = _block_text(caption_block)
+            m = _FIGURE_CAPTION_RE.match(caption_txt)
+            if not m:
+                continue
+
             fig_id = int(m.group(2))
             if fig_id in seen_ids:
                 continue
-
-            # Search for the caption text position on the page
-            search_text = m.group(0).strip()
-            rects = page.search_for(search_text, quads=False)
-            if not rects:
-                continue
-
-            # Use the first match (topmost occurrence)
-            caption_rect = rects[0]
             seen_ids.add(fig_id)
 
-            # Determine the column the caption is in
+            caption_bbox = caption_block["bbox"]
+            caption_y0 = caption_bbox[1]
+            caption_width = caption_bbox[2] - caption_bbox[0]
+            caption_center = (caption_bbox[0] + caption_bbox[2]) / 2
+
+            # Determine column vs full-width layout using the full
+            # caption block width, not just the "Figure N:" prefix.
             page_mid_x = page_rect.width / 2
-            if caption_rect.x0 < page_mid_x:
+            is_centered = abs(caption_center - page_mid_x) < page_mid_x * 0.15
+            is_wide_caption = caption_width > page_rect.width * 0.35
+            is_full_width = caption_width > page_rect.width * 0.5 or (
+                is_centered and is_wide_caption
+            )
+
+            if is_full_width:
+                col_x0 = max(content_left - 2, page_rect.x0)
+                col_x1 = min(content_right + 2, page_rect.x1)
+            elif caption_center < page_mid_x:
                 # Left column
-                col_x0 = page_rect.x0 + 5
+                col_x0 = max(content_left - 2, page_rect.x0)
                 col_x1 = page_mid_x - 5
             else:
                 # Right column
                 col_x0 = page_mid_x + 5
-                col_x1 = page_rect.x1 - 5
+                col_x1 = min(content_right + 2, page_rect.x1)
 
-            # For full-width figures (caption spans both columns)
-            if caption_rect.width > page_rect.width * 0.5:
-                col_x0 = page_rect.x0 + 5
-                col_x1 = page_rect.x1 - 5
+            col_width = col_x1 - col_x0
 
-            # Find the figure region above the caption.
-            # Get all text blocks and find the nearest text above the
-            # caption that's in the same column.
-            blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
-
+            # Find the figure region above the caption by identifying
+            # the nearest body text paragraph boundary.
             above_y = page_rect.y0  # default: page top
             for block in blocks:
                 if block["type"] != 0:
@@ -297,7 +395,7 @@ def _find_figure_regions(doc: fitz.Document) -> list[dict]:
                 block_center_x = (block_bbox[0] + block_bbox[2]) / 2
 
                 # Must be above caption
-                if block_bottom >= caption_rect.y0 - 2:
+                if block_bottom >= caption_y0 - 2:
                     continue
 
                 # Must be in the same column region
@@ -307,46 +405,28 @@ def _find_figure_regions(doc: fitz.Document) -> list[dict]:
                 if not in_column:
                     continue
 
-                block_text = ""
-                for line in block.get("lines", []):
-                    for span in line.get("spans", []):
-                        block_text += span.get("text", "")
-                block_text = block_text.strip()
+                block_txt = _block_text(block)
 
-                # Skip another figure's caption
-                if _FIGURE_CAPTION_RE.match(block_text):
+                # Figure and table captions set boundaries
+                if _FIGURE_CAPTION_RE.match(block_txt):
+                    above_y = max(above_y, block_bottom + 5)
+                    continue
+                if _TABLE_CAPTION_RE.match(block_txt):
                     above_y = max(above_y, block_bottom + 5)
                     continue
 
-                block_height = block_bbox[3] - block_bbox[1]
-
-                # Skip short annotation-like blocks (axis labels,
-                # data labels) that sit inside the chart area
-                if (
-                    block_height <= _ANNOTATION_MAX_HEIGHT
-                    and len(block_text) <= _ANNOTATION_MAX_CHARS
-                ):
-                    continue
-
-                # Skip blocks that are mostly numeric data (heatmap
-                # values, chart data rendered as text inside figures)
-                alpha_chars = sum(1 for c in block_text if c.isalpha())
-                if len(block_text) > 20 and alpha_chars < len(block_text) * 0.3:
-                    continue
-
-                # Skip concatenated axis labels (no spaces = labels
-                # extracted as a single run, e.g. "ABCDEFGActivity")
-                if " " not in block_text and len(block_text) < 60:
-                    continue
-
-                above_y = max(above_y, block_bottom)
+                # Only body text paragraphs set the upper boundary.
+                # Figure-internal elements (axis labels, legends, data
+                # annotations) are narrow or short and fail this check.
+                if _is_body_text_block(block, col_width):
+                    above_y = max(above_y, block_bottom)
 
             # Build figure rect
             fig_rect = fitz.Rect(
                 col_x0,
                 max(above_y, page_rect.y0),
                 col_x1,
-                caption_rect.y0 - 2,
+                caption_y0 - 2,
             )
 
             if fig_rect.height < _MIN_FIGURE_HEIGHT:
@@ -362,12 +442,67 @@ def _find_figure_regions(doc: fitz.Document) -> list[dict]:
                 {
                     "page": page_num,
                     "figure_id": fig_id,
-                    "caption": search_text,
+                    "caption": caption_txt[:60],
                     "rect": fig_rect,
                 }
             )
 
     return figures
+
+
+def _trim_whitespace(pix: fitz.Pixmap) -> fitz.Pixmap:
+    """Trim whitespace rows from top and bottom of a rendered figure.
+
+    Scans for near-white rows and crops them, leaving a small padding.
+    Handles cases where the detected region extends above the actual
+    figure content (e.g., page headers or tables above the figure).
+
+    PyMuPDF pixmaps from clipped rendering retain absolute page
+    coordinates (irect origin is NOT (0,0)), so crop rects must
+    use the pixmap's coordinate system.
+    """
+    n = pix.n
+    stride = pix.stride
+    samples = pix.samples
+
+    # Find first non-white row from top (0-based pixel row)
+    top = 0
+    for y in range(pix.height):
+        offset = y * stride
+        row = samples[offset : offset + pix.width * n]
+        if min(row) < _WHITE_THRESHOLD:
+            top = y
+            break
+    else:
+        return pix  # entirely white
+
+    # Find last non-white row from bottom
+    bottom = pix.height
+    for y in range(pix.height - 1, top - 1, -1):
+        offset = y * stride
+        row = samples[offset : offset + pix.width * n]
+        if min(row) < _WHITE_THRESHOLD:
+            bottom = y + 1
+            break
+
+    # Add padding (in pixel rows)
+    top = max(0, top - 10)
+    bottom = min(pix.height, bottom + 10)
+
+    if bottom - top < 30 or (top == 0 and bottom == pix.height):
+        return pix
+
+    # Convert pixel-row offsets to the pixmap's absolute coordinate system
+    irect = pix.irect
+    if isinstance(irect, tuple):
+        px0, py0, px1, _py1 = irect
+    else:
+        px0, py0, px1, _py1 = irect.x0, irect.y0, irect.x1, irect.y1
+
+    crop = fitz.IRect(px0, py0 + top, px1, py0 + bottom)
+    cropped = fitz.Pixmap(pix.colorspace, crop, pix.alpha)
+    cropped.copy(pix, crop)
+    return cropped
 
 
 def _render_figure_region(
@@ -386,8 +521,54 @@ def _render_figure_region(
     if pix.width < 50 or pix.height < 30:
         return False
 
+    # Trim whitespace rows from top/bottom
+    pix = _trim_whitespace(pix)
+    if pix.width < 50 or pix.height < 30:
+        return False
+
     pix.save(str(output_path))
     return True
+
+
+def _extract_images_fallback(
+    doc: fitz.Document,
+    img_dir: Path,
+    min_width: int,
+    min_height: int,
+    min_area: int,
+) -> list[Path]:
+    """Fall back to extracting embedded raster XObjects when no captions found.
+
+    For non-academic PDFs that lack "Figure N:" captions, extract images
+    directly from the PDF's internal image objects.
+    """
+    images: list[Path] = []
+    seen_xrefs: set[int] = set()
+
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        image_list = page.get_images(full=True)
+        for img_idx, img_info in enumerate(image_list):
+            xref = img_info[0]
+            if xref in seen_xrefs:
+                continue
+            seen_xrefs.add(xref)
+            try:
+                pix = fitz.Pixmap(doc, xref)
+                if pix.width < min_width or pix.height < min_height:
+                    continue
+                if pix.width * pix.height < min_area:
+                    continue
+                # Convert CMYK or other colorspaces to RGB
+                if pix.n > 4:
+                    pix = fitz.Pixmap(fitz.csRGB, pix)
+                img_path = img_dir / f"image_p{page_num + 1}_{img_idx + 1}.png"
+                pix.save(str(img_path))
+                images.append(img_path)
+            except Exception as e:
+                logger.debug("Failed to extract image xref %d: %s", xref, e)
+
+    return images
 
 
 def extract_with_pymupdf(
@@ -433,9 +614,12 @@ def extract_with_pymupdf(
 
     full_text = "\n\n".join(md_parts)
 
+    # ── Detect content margins (excludes line number gutters) ────────
+    content_margins = _detect_content_margins(doc)
+
     # ── Extract figures by rendering page regions ─────────────────────
     images: list[Path] = []
-    figure_regions = _find_figure_regions(doc)
+    figure_regions = _find_figure_regions(doc, content_margins)
 
     render_dpi = int(72 * images_scale) if images_scale != 2.0 else _RENDER_DPI
 
@@ -462,6 +646,17 @@ def extract_with_pymupdf(
                 "Failed to render figure %d from page %d",
                 fig_id,
                 fig_info["page"] + 1,
+            )
+
+    # Fall back to embedded image extraction if no captions found
+    if not figure_regions:
+        images = _extract_images_fallback(
+            doc, img_dir, min_image_width, min_image_height, min_image_area
+        )
+        if images:
+            logger.info(
+                "No figure captions found; extracted %d embedded images as fallback",
+                len(images),
             )
 
     # Warn if we found fewer figures than captions in the text
