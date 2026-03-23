@@ -285,6 +285,7 @@ def convert(
                 backend=backend,
                 provider=provider,
                 model=model,
+                text_endpoint=text_endpoint,
                 verbose=False,
             )
             if result:
@@ -312,6 +313,7 @@ def convert(
                     img_dir,
                     provider=provider,
                     model=vlm_model,
+                    vlm_endpoint=vlm_endpoint,
                     verbose=True,
                 )
             )
@@ -344,6 +346,7 @@ def convert(
                     equations=[],
                     provider=provider,
                     model=model,
+                    text_endpoint=text_endpoint,
                     verbose=True,
                 )
             )

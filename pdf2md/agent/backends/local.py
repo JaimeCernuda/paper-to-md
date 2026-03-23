@@ -706,6 +706,7 @@ class LocalBackend(AgentBackend):
         *,
         provider: str | None = None,
         model: str | None = None,
+        text_endpoint: str | None = None,
         verbose: bool = False,
     ) -> str | None:
         try:
@@ -719,7 +720,7 @@ class LocalBackend(AgentBackend):
         from ..providers import get_provider_config
 
         provider = provider or "lm_studio"
-        config = get_provider_config(provider, model)
+        config = get_provider_config(provider, model, api_base=text_endpoint)
 
         content = md_path.read_text(encoding="utf-8")
         changes: list[str] = []
@@ -746,6 +747,7 @@ class LocalBackend(AgentBackend):
         *,
         provider: str | None = None,
         model: str | None = None,
+        vlm_endpoint: str | None = None,
         verbose: bool = False,
     ) -> list[dict]:
         try:
@@ -759,7 +761,7 @@ class LocalBackend(AgentBackend):
         from ..providers import get_vlm_config
 
         provider = provider or "lm_studio"
-        config = get_vlm_config(provider, model)
+        config = get_vlm_config(provider, model, api_base=vlm_endpoint)
 
         def _fig_sort_key(p: Path) -> int:
             m = re.search(r"\d+", p.stem)
@@ -809,6 +811,7 @@ class LocalBackend(AgentBackend):
         *,
         provider: str | None = None,
         model: str | None = None,
+        text_endpoint: str | None = None,
         verbose: bool = False,
     ) -> str:
         """Synthesize final markdown by programmatic integration + LLM cleanup.
@@ -830,7 +833,7 @@ class LocalBackend(AgentBackend):
         from ..providers import get_provider_config
 
         provider = provider or "lm_studio"
-        config = get_provider_config(provider, model)
+        config = get_provider_config(provider, model, api_base=text_endpoint)
 
         content = md_path.read_text(encoding="utf-8")
 

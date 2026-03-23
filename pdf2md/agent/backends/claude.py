@@ -18,11 +18,12 @@ class ClaudeBackend(AgentBackend):
         *,
         provider: str | None = None,
         model: str | None = None,
+        text_endpoint: str | None = None,
         verbose: bool = False,
     ) -> str | None:
         """Run cleanup using Claude Agent SDK.
 
-        Note: provider and model are ignored for this backend.
+        Note: provider, model, and text_endpoint are ignored for this backend.
         """
         from ..cleanup import run_cleanup_agent
 
@@ -34,6 +35,7 @@ class ClaudeBackend(AgentBackend):
         *,
         provider: str | None = None,
         model: str | None = None,
+        vlm_endpoint: str | None = None,
         verbose: bool = False,
     ) -> list[dict]:
         """Not implemented for Claude backend (uses Docling VLM pipeline instead)."""
