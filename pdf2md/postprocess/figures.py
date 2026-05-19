@@ -36,6 +36,9 @@ def process_figures(content: str, image_files: list[str]) -> str:
     # Find and process figure captions
     content = _embed_figures_at_captions(content, figure_map)
 
+    # Add placeholders for figures referenced in text but not embedded
+    content = _add_missing_figure_placeholders(content, figure_map)
+
     return content
 
 
@@ -97,6 +100,46 @@ def _embed_figures_at_captions(content: str, figure_map: dict[int, str]) -> str:
                 result.append("")  # Blank line between image and caption
                 embedded_figures.add(fig_num)
 
+        result.append(line)
+
+    return "\n".join(result)
+
+
+def _add_missing_figure_placeholders(content: str, figure_map: dict[int, str]) -> str:
+    """Add placeholders for figures referenced in text but not embedded.
+
+    Scans for "Figure N" or "Fig. N" references that don't have a
+    corresponding ![Figure N] embed. Inserts an HTML comment placeholder
+    so downstream consumers know the figure exists but wasn't captured.
+    """
+    # Find all figure numbers referenced in the text
+    referenced: set[int] = set()
+    for m in re.finditer(r"(?:Figure|Fig\.?)\s+(\d+)", content, re.IGNORECASE):
+        referenced.add(int(m.group(1)))
+
+    # Find all figure numbers already embedded
+    embedded: set[int] = set()
+    for m in re.finditer(r"!\[Figure\s+(\d+)\]", content):
+        embedded.add(int(m.group(1)))
+
+    # Find missing figures (referenced but not embedded and not in figure_map)
+    missing = referenced - embedded
+    if not missing:
+        return content
+
+    # Insert placeholders before the first reference to each missing figure
+    lines = content.split("\n")
+    result: list[str] = []
+    inserted: set[int] = set()
+
+    for line in lines:
+        for fig_num in missing - inserted:
+            pattern = rf"(?:Figure|Fig\.?)\s+{fig_num}\b"
+            if re.search(pattern, line, re.IGNORECASE):
+                result.append(f"<!-- Figure {fig_num}: image not extracted -->")
+                result.append("")
+                inserted.add(fig_num)
+                break
         result.append(line)
 
     return "\n".join(result)

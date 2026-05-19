@@ -202,14 +202,13 @@ def _get_vlm_options(model: str | None = None, provider: str | None = None):
         url=api_url,
         params=dict(
             model=vlm_model,
-            max_tokens=1024,
         ),
         prompt=(
             "Describe this scientific figure in detail. "
             "Identify the type (chart, diagram, flowchart, etc.), "
             "key elements, labels, and any data or relationships shown."
         ),
-        timeout=120,
+        timeout=300,
         picture_area_threshold=0.02,
     )
 

@@ -1,8 +1,6 @@
 """Submit real papers to the homelab service, monitor, and retrieve results."""
 
 import base64
-import json
-import sys
 import tarfile
 import time
 from io import BytesIO

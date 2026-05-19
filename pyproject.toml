@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "paper-to-md"
 version = "0.2.1"
-description = "Convert academic PDF papers to clean markdown using Docling + AI cleanup"
+description = "Convert academic PDF papers to clean markdown with local LLM/VLM synthesis"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = "MIT"

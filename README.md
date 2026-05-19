@@ -20,10 +20,10 @@ Convert academic PDF papers to clean, readable markdown with linked citations, e
 # Install
 uv tool install paper-to-md
 
-# Pre-download Docling ML models (~500MB, one-time)
+# Optional: pre-download Docling ML models for the enrich command (~500MB)
 pdf2md download-models
 
-# Convert a paper — uses medium depth by default (Docling + postprocess + LLM retouch)
+# Convert a paper — uses medium depth by default (PyMuPDF + postprocess + LLM retouch)
 pdf2md convert paper.pdf
 
 # Output goes to ./paper/paper.md (same directory as the PDF)
@@ -38,9 +38,9 @@ pdf2md uses a depth-based system to control how much processing is applied.
 
 | Depth | Default? | What happens | AI required? |
 |-------|----------|-------------|-------------|
-| `low` | | Docling extraction + rule-based postprocessing (citations, figures, sections, cleanup) | No |
-| **`medium`** | **yes** | Everything in `low` + LLM retouch via [Claude Agent SDK](https://github.com/anthropics/claude-code-sdk-python) (author formatting, lettered section headers, figure relocation, paragraph merging) | Yes (Claude API or `--local`) |
-| `high` | | Everything in `medium` + VLM figure descriptions + code/equation enrichments | Yes (Claude API or `--local`) |
+| `low` | | PyMuPDF extraction + rule-based postprocessing (citations, figures, tables, sections, cleanup) | No |
+| **`medium`** | **yes** | Everything in `low` + LLM retouch via [Claude Agent SDK](https://github.com/anthropics/claude-code-sdk-python) or local LiteLLM backend (author formatting, lettered section headers) | Yes (Claude API or `--local`) |
+| `high` | | Everything in `medium` + VLM figure descriptions + synthesis pass for equations and garbled unicode cleanup | Yes (Claude API or `--local`) |
 
 ```bash
 # Fast, no AI needed
@@ -49,7 +49,7 @@ pdf2md convert paper.pdf -d low
 # Default — includes agentic LLM cleanup (Claude)
 pdf2md convert paper.pdf
 
-# Full pipeline — adds VLM figure descriptions and RAG metadata
+# Full pipeline — adds VLM figure descriptions and synthesis
 pdf2md convert paper.pdf -d high
 
 # Any depth with a local LLM instead of Claude
@@ -72,8 +72,13 @@ If `output_dir` is omitted, output goes to the same directory as the PDF.
 | `-d, --depth` | Analysis depth: `low`, `medium` (default), `high` |
 | `-l, --local` | Use local LLM/VLM instead of cloud (Claude) |
 | `-p, --provider` | LLM provider: `lm_studio` (default), `ollama` |
-| `-m, --model` | Override LLM/VLM model name |
-| `--keep-raw` | Save raw Docling extraction alongside processed output |
+| `-m, --model` | Override text LLM model name |
+| `--vlm-model` | Override VLM model name |
+| `--text-endpoint` | Override text LLM endpoint URL |
+| `--vlm-endpoint` | Override VLM endpoint URL |
+| `--no-vlm` | Skip VLM figure descriptions at high depth |
+| `--synthesis/--no-synthesis` | Enable or disable the high-depth synthesis pass |
+| `--keep-raw` | Save raw PyMuPDF extraction alongside processed output |
 | `--raw` | Skip all processing, output only raw extraction |
 | `--images-scale N` | Image resolution multiplier (default: 2.0) |
 | `--min-image-width` | Minimum image width in pixels, filters logos (default: 200) |
@@ -84,15 +89,14 @@ If `output_dir` is omitted, output goes to the same directory as the PDF.
 ```
 output/paper/
 ├── paper.md              # Final processed markdown
-├── paper_raw.md          # Raw Docling output (if --keep-raw)
+├── paper_raw.md          # Raw PyMuPDF output (if --keep-raw)
 ├── img/
 │   ├── figure1.png
 │   ├── figure2.png
 │   └── ...
-├── enrichments.json      # All metadata (depth=high only)
-├── figures.json          # Figure metadata
-├── equations.json        # Equations with LaTeX
-└── code_blocks.json      # Code with language detection
+├── figures.json          # VLM descriptions (depth=high)
+├── tables.json           # Extracted tables as markdown
+└── equations.json        # Reconstructed LaTeX equations
 ```
 
 ### `pdf2md retouch` — LLM Cleanup Only
@@ -239,13 +243,13 @@ This submits the PDF, polls for completion, downloads results, and reports extra
 
 ## Processing Pipeline
 
-### 1. Docling Extraction
+### 1. PyMuPDF Extraction
 
-Uses [Docling](https://github.com/DS4SD/docling) (ML-based) to extract:
-- Text with structure (headings, paragraphs, lists)
-- Tables with formatting
-- Figures as images
-- Equations
+Uses PyMuPDF to extract:
+- Text per page
+- Vector figures rendered as page-region PNGs by locating `Figure N:` captions
+- Tables via `page.find_tables()`
+- Raw text for deterministic post-processing
 
 ### 2. Deterministic Post-Processing
 
@@ -264,6 +268,10 @@ Applied at all depth levels (including `low`):
 - Embeds `![Figure N](./img/figureN.png)` above line-start captions
 - Each figure embedded exactly once
 
+**Tables:**
+- Inserts structured markdown tables near matching `Table N:` captions
+- Keeps `tables.json` as a sidecar with extracted table data
+
 **Bibliography:**
 - Adds `<a id="ref-N"></a>` anchors to reference entries
 - Ensures proper spacing between entries
@@ -281,16 +289,21 @@ Uses LLM to fix issues that need judgment:
 - **Author formatting** — Extracts names, affiliations, emails into structured `## Authors` section
 - **Lettered sections** — Classifies `A. Background` as header vs `A. We conducted...` as sentence
 
-### 4. VLM + Enrichments (high depth)
+### 4. VLM + Synthesis (high depth)
 
-Extracts structured data for RAG:
+Generates figure descriptions and runs an edit-based cleanup pass:
 
 | File | Contents |
 |------|----------|
-| `figures.json` | Caption, classification, VLM description, page number |
-| `equations.json` | LaTeX representation, surrounding context |
-| `code_blocks.json` | Code text, detected language |
-| `enrichments.json` | All of the above combined |
+| `figures.json` | Figure IDs, image paths, and VLM descriptions |
+| `tables.json` | Extracted table data as markdown |
+| `equations.json` | Reconstructed LaTeX equations |
+
+Figure descriptions are also inserted after figure images as invisible HTML comments so rendered markdown keeps the paper's original captions while downstream tools can still parse the VLM context.
+
+### 5. Docling Enrichments
+
+The standalone `pdf2md enrich` command still uses Docling for RAG metadata extraction, including code blocks and equation metadata.
 
 ## Local AI Setup
 
@@ -299,6 +312,7 @@ pdf2md supports running entirely locally using LM Studio or Ollama:
 ```bash
 # Using LM Studio (default local provider)
 export LM_STUDIO_HOST=http://localhost:1234/v1
+export PDF2MD_TEXT_MODEL=nemotron-cascade-2-30b-a3b-i1
 uv run pdf2md convert paper.pdf ./output --local
 
 # Using Ollama
@@ -310,6 +324,7 @@ uv run pdf2md convert paper.pdf ./output --local --model qwen3-8b
 
 # VLM on a separate node
 export PDF2MD_VLM_HOST=http://192.168.1.100:1234/v1
+export PDF2MD_VLM_MODEL=qwen3-vl-30b
 uv run pdf2md convert paper.pdf ./output -d high --local
 ```
 
@@ -323,6 +338,15 @@ uv run pdf2md convert paper.pdf ./output -d high --local
 | `LM_STUDIO_HOST` | `http://localhost:1234/v1` | LM Studio endpoint |
 | `PDF2MD_VLM_HOST` | `http://localhost:1234/v1` | VLM endpoint (can differ from text) |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama endpoint |
+
+### Local AI Notes
+
+- `--local` defaults to LM Studio unless `--provider` or `PDF2MD_PROVIDER` is set.
+- Text and vision endpoints are independent. Use `LM_STUDIO_HOST` for retouch/synthesis and `PDF2MD_VLM_HOST` for figure descriptions.
+- If default model names are left in place, pdf2md queries `/v1/models` and prefers a loaded Nemotron text model or loaded VLM model when the endpoint exposes one.
+- High-depth figure descriptions are intentionally long. VLM calls allow larger responses and longer timeouts so thinking VLMs can finish exhaustive chart and diagram descriptions.
+- Thinking tags are stripped from final figure descriptions. If a thinking model emits only an unclosed `<think>` block before hitting its token limit, pdf2md keeps the useful text instead of returning an empty caption.
+- In the homelab setup, the tested endpoints are `http://192.168.86.143:1234/v1` for Nemotron text work and `http://192.168.86.141:8081/v1` for Qwen3-VL figure descriptions.
 
 ## Installation
 

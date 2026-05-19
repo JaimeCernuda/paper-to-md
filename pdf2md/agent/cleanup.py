@@ -283,6 +283,7 @@ async def run_cleanup_with_backend(
     backend: str = "claude",
     provider: str | None = None,
     model: str | None = None,
+    text_endpoint: str | None = None,
     verbose: bool = False,
 ) -> str | None:
     """Run cleanup using the specified backend.
@@ -293,6 +294,7 @@ async def run_cleanup_with_backend(
         backend: Agent backend to use ('claude' or 'local')
         provider: LLM provider (local backend: lm_studio, ollama)
         model: Model name (backend/provider-specific)
+        text_endpoint: Explicit text LLM endpoint URL override
         verbose: Print progress
 
     Returns:
@@ -306,6 +308,7 @@ async def run_cleanup_with_backend(
         img_dir,
         provider=provider,
         model=model,
+        text_endpoint=text_endpoint,
         verbose=verbose,
     )
 
@@ -317,6 +320,7 @@ def run_cleanup_with_backend_sync(
     backend: str = "claude",
     provider: str | None = None,
     model: str | None = None,
+    text_endpoint: str | None = None,
     verbose: bool = False,
 ) -> str | None:
     """Synchronous wrapper for run_cleanup_with_backend.
@@ -330,6 +334,7 @@ def run_cleanup_with_backend_sync(
         backend=backend,
         provider=provider,
         model=model,
+        text_endpoint=text_endpoint,
         verbose=verbose,
     )
     try:
