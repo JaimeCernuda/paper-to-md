@@ -14,17 +14,21 @@ def cleanup_text(content: str) -> str:
     2. Fix ligatures (fi, fl, ff, etc.)
     3. Fix GLYPH<N> artifacts from Docling
     4. Remove OCR-extracted garbage near figure embeds
-    5. Fix hyphenated words split at line endings
-    6. Merge paragraphs split by page breaks
-    7. Collapse excessive blank lines
-    8. Strip trailing whitespace
+    5. Strip copyright boilerplate (ACM/IEEE)
+    6. Fix hyphenated words split at line endings
+    7. Merge paragraphs split by page breaks
+    8. Collapse excessive blank lines
+    9. Strip trailing whitespace
     """
     content = _remove_image_comments(content)
     content = _fix_ligatures(content)
+    content = _fix_math_font_garble(content)
     content = _fix_glyph_artifacts(content)
     content = _remove_ocr_artifacts_near_figures(content)
+    content = _strip_copyright_boilerplate(content)
     content = _fix_hyphenated_words(content)
     content = _merge_split_paragraphs(content)
+    content = _fix_inline_hyphen_breaks(content)
     content = _fix_excessive_blank_lines(content)
     content = _fix_trailing_whitespace(content)
     return content
@@ -57,6 +61,60 @@ def _fix_ligatures(content: str) -> str:
 
     for ligature, replacement in ligatures.items():
         content = content.replace(ligature, replacement)
+
+    return content
+
+
+def _fix_math_font_garble(content: str) -> str:
+    """Fix garbled math font characters from PDF extraction.
+
+    PDF math fonts use codepoints in the Mathematical Alphanumeric Symbols
+    block (U+1D400-U+1D7FF). Some extractors truncate these to the BMP,
+    producing Hangul syllables (U+D400-U+D7FF) or other wrong characters.
+    This function maps them back to plain ASCII letters.
+    """
+    # Build mapping: Hangul-range codepoints → intended ASCII letters
+    # Mathematical Italic Capital: U+1D434 (A) → extracted as U+D434
+    # Mathematical Italic Small: U+1D44E (a) → extracted as U+D44E
+    mapping = {}
+
+    # Italic capitals A-Z (U+1D434-U+1D44D → U+D434-D44D)
+    for i in range(26):
+        mapping[chr(0xD434 + i)] = chr(ord("A") + i)
+
+    # Italic smalls a-z (U+1D44E-U+1D467 → U+D44E-D467)
+    for i in range(26):
+        mapping[chr(0xD44E + i)] = chr(ord("a") + i)
+
+    # Bold capitals A-Z (U+1D400-U+1D419 → U+D400-D419)
+    for i in range(26):
+        mapping[chr(0xD400 + i)] = chr(ord("A") + i)
+
+    # Bold smalls a-z (U+1D41A-U+1D433 → U+D41A-D433)
+    for i in range(26):
+        mapping[chr(0xD41A + i)] = chr(ord("a") + i)
+
+    # Script/calligraphic capitals (U+1D49C → U+D49C, etc.)
+    for i in range(26):
+        mapping[chr(0xD49C + i)] = chr(ord("A") + i)
+
+    # Common math symbols that get garbled
+    extra = {
+        "\u210e": "h",  # PLANCK CONSTANT (ℎ)
+        "\u2113": "l",  # SCRIPT SMALL L (ℓ)
+        "\u2102": "C",  # DOUBLE-STRUCK C (ℂ)
+        "\u211d": "R",  # DOUBLE-STRUCK R (ℝ)
+        "\u2115": "N",  # DOUBLE-STRUCK N (ℕ)
+        "\u2124": "Z",  # DOUBLE-STRUCK Z (ℤ)
+    }
+    mapping.update(extra)
+
+    # Fast path: check if any Hangul-range math chars are present
+    if not re.search(r"[\uD400-\uD4FF]|[\u210E\u2113\u2102\u211D\u2115\u2124]", content):
+        return content
+
+    for garbled, fixed in mapping.items():
+        content = content.replace(garbled, fixed)
 
     return content
 
@@ -129,6 +187,66 @@ def _remove_ocr_artifacts_near_figures(content: str) -> str:
     return "\n".join(line for i, line in enumerate(lines) if i not in to_remove)
 
 
+def _strip_copyright_boilerplate(content: str) -> str:
+    """Remove ACM/IEEE copyright boilerplate that wastes reviewer tokens.
+
+    Strips patterns like:
+    - "Permission to make digital or hard copies..." through DOI line
+    - "ACM Reference Format:" blocks
+    - "ACM ISBN..." lines
+    - IEEE copyright notices
+    """
+    # ACM Reference Format block (must run before copyright block
+    # because both can appear on the same line)
+    content = re.sub(
+        r"ACM Reference [Ff]ormat:\s*"
+        r".*?"
+        r"https?://doi\.org/\S+",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+
+    # ACM copyright block: "Permission to make..." through trailing DOI
+    content = re.sub(
+        r"Permission to make digital or hard copies"
+        r".*?"
+        r"https?://doi\.org/\S+",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+
+    # Fallback for copyright blocks ending with ISBN instead of DOI
+    content = re.sub(
+        r"Permission to make digital or hard copies"
+        r".*?"
+        r"ACM ISBN \S+",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+
+    # IEEE copyright notice
+    content = re.sub(
+        r"(?:©|Copyright)\s*\d{4}\s*IEEE\.?\s*"
+        r"(?:Personal use.*?permitted\.?\s*)?",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+
+    # Standalone DOI lines (orphaned after stripping)
+    content = re.sub(
+        r"^\s*https?://doi\.org/\S+\s*$",
+        "",
+        content,
+        flags=re.MULTILINE,
+    )
+
+    return content
+
+
 def _fix_hyphenated_words(content: str) -> str:
     """Fix words broken by hyphenation at line endings.
 
@@ -199,50 +317,138 @@ def _fix_hyphenated_words(content: str) -> str:
     return "\n".join(line for idx, line in enumerate(result) if idx not in to_remove)
 
 
-def _merge_split_paragraphs(content: str) -> str:
-    """Merge paragraphs split by page breaks.
+def _is_structural_line(stripped: str) -> bool:
+    """Check if a line is structural (header, list, table, figure, caption)."""
+    if not stripped:
+        return True
+    if stripped.startswith("#"):
+        return True
+    if stripped.startswith("!["):
+        return True
+    if stripped.startswith("|"):
+        return True
+    if re.match(r"^[-*]\s", stripped):
+        return True
+    if re.match(r"^\d+[.)]\s", stripped):
+        return True
+    if re.match(r"^(Figure|Fig\.?|Table)\s+\d+", stripped, re.IGNORECASE):
+        return True
+    if re.match(r"^<a\s+id=", stripped):
+        return True
+    if re.match(r"^\[\[?\d+\]", stripped):
+        return True
+    if stripped.startswith("```"):
+        return True
+    if stripped.startswith(">"):
+        return True
+    # Bullet-like indicators (ACM CCS, keywords markers)
+    if stripped.startswith("•"):
+        return True
+    return False
 
-    Detects: line ending without sentence termination (.!?:;)
-    followed by blank line, followed by continuation (lowercase start
-    or common continuation words like parenthetical).
+
+def _merge_split_paragraphs(content: str) -> str:
+    """Join column-width line breaks into proper markdown paragraphs.
+
+    PyMuPDF preserves ~60-char column-width line breaks. This function joins
+    consecutive non-blank lines that belong to the same paragraph. It also
+    merges across single blank lines when the text clearly continues
+    (page-break splits).
+
+    A line continues the previous paragraph when:
+    - The previous line does NOT end with sentence-terminal punctuation
+    - The current line starts with a lowercase letter or continues mid-thought
+    - Neither line is structural (header, list, table, figure, caption, etc.)
     """
     lines = content.split("\n")
     result: list[str] = []
-    i = 0
+    in_code_fence = False
 
+    i = 0
     while i < len(lines):
         line = lines[i]
+        stripped = line.strip()
 
-        if (
-            i + 2 < len(lines)
-            and line.strip()
-            and not line.strip().startswith("#")
-            and not line.strip().startswith("![")
-            and not line.strip().startswith("-")
-            and not line.strip().startswith("*")
-            and not line.strip().startswith("|")
-            and not re.match(r"^\d+[.)]\s", line.strip())
-            and not re.search(r'[.!?:;"\)>]$', line.rstrip())
-            and lines[i + 1].strip() == ""
-            and lines[i + 2].strip()
-            and not lines[i + 2].strip().startswith("#")
-            and not lines[i + 2].strip().startswith("![")
-            and not lines[i + 2].strip().startswith("-")
-            and not lines[i + 2].strip().startswith("*")
-            and not lines[i + 2].strip().startswith("|")
-            and not re.match(r"^\d+[.)]\s", lines[i + 2].strip())
-            and not re.match(r"^(Fig|Figure|Table)\b", lines[i + 2].strip())
-        ):
-            next_line = lines[i + 2].strip()
-            if next_line and (next_line[0].islower() or next_line.startswith("(")):
-                result.append(line.rstrip() + " " + next_line)
-                i += 3
-                continue
+        # Track code fences
+        if stripped.startswith("```"):
+            in_code_fence = not in_code_fence
+            result.append(line)
+            i += 1
+            continue
 
-        result.append(line)
+        if in_code_fence:
+            result.append(line)
+            i += 1
+            continue
+
+        # Blank or structural lines pass through unchanged
+        if not stripped or _is_structural_line(stripped):
+            result.append(line)
+            i += 1
+            continue
+
+        # Start building a paragraph by joining continuation lines
+        para_parts = [stripped]
         i += 1
 
+        while i < len(lines):
+            next_stripped = lines[i].strip()
+
+            # Blank line: check for page-break merge (blank + lowercase continuation)
+            if not next_stripped:
+                if (
+                    i + 1 < len(lines)
+                    and lines[i + 1].strip()
+                    and not _is_structural_line(lines[i + 1].strip())
+                    and not re.search(r'[.!?:;"\)>]$', para_parts[-1])
+                    and (lines[i + 1].strip()[0].islower() or lines[i + 1].strip().startswith("("))
+                ):
+                    # Skip the blank line and merge the continuation
+                    i += 1
+                    continue
+                break
+
+            # Stop at structural lines
+            if _is_structural_line(next_stripped):
+                break
+
+            # Stop if previous part ended with terminal punctuation AND
+            # next line starts with uppercase AND the previous fragment
+            # is short (a real paragraph break, not just a mid-sentence period)
+            prev_part = para_parts[-1]
+            if (
+                re.search(r"[.!?:;]$", prev_part)
+                and next_stripped[0].isupper()
+                and len(prev_part) < 50
+            ):
+                break
+
+            # This line continues the paragraph
+            para_parts.append(next_stripped)
+            i += 1
+
+        result.append(" ".join(para_parts))
+
     return "\n".join(result)
+
+
+def _fix_inline_hyphen_breaks(content: str) -> str:
+    """Fix residual hyphen breaks within reflowed paragraphs.
+
+    After paragraph reflow, some hyphen breaks survive as "word- continuation"
+    within a single line (e.g., "Con- versely"). This pass joins them when
+    the continuation starts with a lowercase letter.
+
+    Preserves legitimate compound words like "error-bounded" and
+    "high-performance" where both parts are complete words.
+    """
+    # Match "word- continuation" where continuation is lowercase
+    # But NOT "word-word" (no space, already joined compound)
+    return re.sub(
+        r"(\w)- ([a-z])",
+        r"\1\2",
+        content,
+    )
 
 
 def _fix_excessive_blank_lines(content: str) -> str:

@@ -214,7 +214,7 @@ class TestProviderConfig:
     def test_unknown_vlm_provider_raises(self):
         from pdf2md.agent.providers import get_vlm_config
 
-        with pytest.raises(ValueError, match="Unknown provider"):
+        with pytest.raises(ValueError, match="Unknown VLM provider"):
             get_vlm_config("bogus_provider")
 
     def test_lm_studio_works(self):

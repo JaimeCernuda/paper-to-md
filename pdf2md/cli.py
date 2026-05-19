@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from pathlib import Path
 
@@ -15,6 +17,35 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _run_async(coro):
+    """Run an async coroutine safely from sync context.
+
+    Avoids the LiteLLM event loop binding issue that occurs when
+    asyncio.run() is called multiple times in the same process.
+    Uses a dedicated thread with its own event loop.
+    """
+    result = None
+    exception = None
+
+    def _thread_target():
+        nonlocal result, exception
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(coro)
+        except Exception as e:
+            exception = e
+        finally:
+            loop.close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(_thread_target)
+        future.result()
+
+    if exception:
+        raise exception
+    return result
 
 
 class Depth(str, Enum):
@@ -63,11 +94,22 @@ def convert(
         "-p",
         help="LLM provider: lm_studio (default), ollama",
     ),
+    # --- Feature flags ---
+    no_vlm: bool = typer.Option(
+        False,
+        "--no-vlm",
+        help="Skip VLM figure descriptions (faster runs)",
+    ),
+    synthesis: bool = typer.Option(
+        True,
+        "--synthesis/--no-synthesis",
+        help="Enable/disable Nemotron synthesis pass (default: enabled at high depth)",
+    ),
     # --- Output options ---
     raw: bool = typer.Option(
         False,
         "--raw",
-        help="Skip all processing, output raw Docling extraction only",
+        help="Skip all processing, output raw PyMuPDF extraction only",
     ),
     keep_raw: bool = typer.Option(
         False,
@@ -79,7 +121,23 @@ def convert(
         None,
         "--model",
         "-m",
-        help="Override LLM model (retouch) or VLM model (figure descriptions)",
+        help="Override LLM model for retouch/synthesis",
+    ),
+    vlm_model: str = typer.Option(
+        None,
+        "--vlm-model",
+        help="Override VLM model for figure descriptions",
+    ),
+    # --- Endpoint options ---
+    text_endpoint: str = typer.Option(
+        None,
+        "--text-endpoint",
+        help="Override text LLM endpoint URL (e.g. http://host:1234/v1)",
+    ),
+    vlm_endpoint: str = typer.Option(
+        None,
+        "--vlm-endpoint",
+        help="Override VLM endpoint URL (e.g. http://host:8081/v1)",
     ),
     # --- Image options ---
     images_scale: float = typer.Option(
@@ -108,9 +166,9 @@ def convert(
 
     \b
     DEPTH LEVELS:
-        low     Docling extraction + rule-based post-processing (no AI)
+        low     PyMuPDF extraction + rule-based post-processing (no AI)
         medium  + LLM retouch (fix headers, figures, paragraphs)
-        high    + VLM figure descriptions + code/equation enrichments
+        high    + VLM figure descriptions + synthesis pass + equations
 
     \b
     BACKENDS:
@@ -124,10 +182,14 @@ def convert(
         pdf2md convert paper.pdf -d low                 # fast, no AI
         pdf2md convert paper.pdf -d high                # thorough
         pdf2md convert paper.pdf --local                # medium, local LLM
-        pdf2md convert paper.pdf -l -d high             # local LLM + VLM
+        pdf2md convert paper.pdf -l -d high             # local LLM + VLM + synthesis
+        pdf2md convert paper.pdf -l -d high --no-vlm    # skip VLM descriptions
     """
+    import json as _json
+    import os
+
     from pdf2md.agent.providers import resolve_provider
-    from pdf2md.extraction.docling import DoclingNotInstalledError, extract_with_docling
+    from pdf2md.extraction.pymupdf import extract_with_pymupdf
     from pdf2md.postprocess import process_markdown
 
     if output_dir is None:
@@ -136,10 +198,16 @@ def convert(
     pdf_stem = pdf_path.stem
     doc_dir = output_dir / pdf_stem
 
+    # Override endpoints via CLI flags if provided
+    if text_endpoint:
+        os.environ["LM_STUDIO_HOST"] = text_endpoint
+    if vlm_endpoint:
+        os.environ["PDF2MD_VLM_HOST"] = vlm_endpoint
+
     # Determine what features are enabled based on depth
     use_retouch = depth in (Depth.medium, Depth.high) and not raw
-    use_enrichments = depth == Depth.high and not raw
-    use_vlm_descriptions = depth == Depth.high and not raw
+    use_vlm_descriptions = depth == Depth.high and not raw and not no_vlm
+    use_synthesis = depth == Depth.high and not raw and synthesis
 
     provider = resolve_provider(local, provider)
 
@@ -148,14 +216,33 @@ def convert(
         backend_str = f"local ({provider})"
     else:
         backend_str = "cloud (Claude)"
+
+    total_steps = 3  # extract + postprocess + retouch
+    if use_vlm_descriptions:
+        total_steps += 1
+    if use_synthesis:
+        total_steps += 1
+
     console.print(f"\n[bold]Converting:[/bold] {pdf_path.name}")
     console.print(f"[bold]Output:[/bold] {doc_dir}")
-    console.print(f"[bold]Depth:[/bold] {depth.value} | [bold]Backend:[/bold] {backend_str}\n")
+    console.print(f"[bold]Depth:[/bold] {depth.value} | [bold]Backend:[/bold] {backend_str}")
+    if depth == Depth.high:
+        flags = []
+        if no_vlm:
+            flags.append("VLM disabled")
+        if not synthesis:
+            flags.append("synthesis disabled")
+        if flags:
+            console.print(f"[bold]Flags:[/bold] {', '.join(flags)}")
+    console.print()
 
-    # Step 1: Extract with Docling
-    console.print("[1/4] Extracting with Docling...")
+    step = 0
+
+    # ── Step 1: Extract ───────────────────────────────────────────────
+    step += 1
+    console.print(f"[{step}/{total_steps}] Extracting with PyMuPDF...")
     try:
-        md_path, images = extract_with_docling(
+        md_path, images, tables = extract_with_pymupdf(
             pdf_path,
             output_dir,
             images_scale=images_scale,
@@ -163,39 +250,38 @@ def convert(
             min_image_height=min_image_height,
             min_image_area=min_image_area,
         )
-    except DoclingNotInstalledError as e:
-        console.print(f"[red]ERROR:[/red] {e}")
-        raise typer.Exit(1)
     except RuntimeError as e:
         console.print(f"[red]ERROR:[/red] {e}")
         raise typer.Exit(1)
 
-    console.print(f"      Extracted {len(images)} figures")
+    console.print(f"      Extracted {len(images)} figures, {len(tables)} tables")
 
-    # Step 2: Save raw if requested
+    # ── Step 2: Save raw if requested ─────────────────────────────────
     if keep_raw or raw:
         raw_path = doc_dir / f"{pdf_stem}_raw.md"
         shutil.copy(md_path, raw_path)
         console.print(f"      Saved raw: {raw_path.name}")
 
-    # Step 3: Deterministic post-processing
+    # ── Step 3: Deterministic post-processing ─────────────────────────
+    step += 1
     if not raw:
-        console.print("[2/4] Post-processing (rule-based)...")
+        console.print(f"[{step}/{total_steps}] Post-processing (rule-based)...")
         content = md_path.read_text(encoding="utf-8")
         image_files = [img.name for img in images]
-        processed = process_markdown(content, image_files)
+        processed = process_markdown(content, image_files, tables=tables)
         md_path.write_text(processed, encoding="utf-8")
-        console.print("      Applied: citations, sections, figures, bibliography")
+        console.print("      Applied: citations, sections, figures, tables, bibliography")
     else:
-        console.print("[2/4] Post-processing... [dim]skipped (--raw)[/dim]")
+        console.print(f"[{step}/{total_steps}] Post-processing... [dim]skipped (--raw)[/dim]")
 
-    # Step 4: LLM retouch (medium, high depth)
+    # ── Step 4: LLM retouch ───────────────────────────────────────────
+    step += 1
     if use_retouch:
         from pdf2md.agent.backends import BackendNotInstalledError
         from pdf2md.agent.cleanup import run_cleanup_with_backend_sync
 
         backend = "local" if local else "claude"
-        console.print(f"[3/4] Retouching with LLM ({backend_str})...")
+        console.print(f"[{step}/{total_steps}] Retouching with LLM ({backend_str})...")
 
         try:
             result = run_cleanup_with_backend_sync(
@@ -203,6 +289,7 @@ def convert(
                 backend=backend,
                 provider=provider,
                 model=model,
+                text_endpoint=text_endpoint,
                 verbose=False,
             )
             if result:
@@ -212,45 +299,76 @@ def convert(
         except BackendNotInstalledError as e:
             console.print(f"[yellow]      Skipped:[/yellow] {e}")
     else:
-        console.print("[3/4] Retouching (LLM)... [dim]skipped (depth=low)[/dim]")
+        console.print(f"[{step}/{total_steps}] Retouching (LLM)... [dim]skipped (depth=low)[/dim]")
 
-    # Step 5: Enrichments + VLM descriptions (high depth)
-    if use_enrichments:
-        console.print("[4/4] Enriching (VLM + analysis)...")
+    # ── Step 5: VLM figure descriptions ───────────────────────────────
+    figure_results: list[dict] = []
+    if use_vlm_descriptions and images:
+        step += 1
+        console.print(f"[{step}/{total_steps}] Describing {len(images)} figures with VLM...")
         try:
-            from pdf2md.extraction.enrichments import extract_enrichments
+            from pdf2md.agent.backends.local import LocalBackend
 
-            enrichments = extract_enrichments(
-                pdf_path,
-                output_dir,
-                images_scale=images_scale,
-                enable_picture_description=use_vlm_descriptions,
-                use_local_vlm=local,
-                vlm_model=model,
-                vlm_provider=provider,
+            backend_obj = LocalBackend()
+            img_dir = doc_dir / "img"
+
+            figure_results = _run_async(
+                backend_obj.run_describe_figures(
+                    img_dir,
+                    provider=provider,
+                    model=vlm_model,
+                    vlm_endpoint=vlm_endpoint,
+                    verbose=True,
+                )
             )
-            console.print(
-                f"      Code: {enrichments.metadata['num_code_blocks']}, "
-                f"Equations: {enrichments.metadata['num_equations']}, "
-                f"Figures: {enrichments.metadata['num_figures']}"
+            described = sum(1 for r in figure_results if r.get("description"))
+            console.print(f"      VLM descriptions: {described}/{len(figure_results)}")
+
+            # Save figures.json
+            (doc_dir / "figures.json").write_text(
+                _json.dumps(figure_results, indent=2, ensure_ascii=False), encoding="utf-8"
             )
-            if use_vlm_descriptions:
-                described = sum(1 for f in enrichments.figures if f.description)
-                console.print(f"      VLM descriptions: {described}/{len(enrichments.figures)}")
         except Exception as e:
-            console.print(f"[yellow]      Failed:[/yellow] {e}")
-    else:
-        console.print("[4/4] Enriching (VLM)... [dim]skipped (requires depth=high)[/dim]")
+            console.print(f"[yellow]      VLM failed:[/yellow] {e}")
+    elif use_vlm_descriptions:
+        step += 1
+        console.print(f"[{step}/{total_steps}] Enriching... [dim]no figures to describe[/dim]")
 
-    # Summary
+    # ── Step 6: Synthesis pass ────────────────────────────────────────
+    if use_synthesis:
+        step += 1
+        console.print(f"[{step}/{total_steps}] Running synthesis pass (Nemotron)...")
+        try:
+            from pdf2md.agent.backends.local import LocalBackend
+
+            backend_obj = LocalBackend()
+            result = _run_async(
+                backend_obj.run_synthesis(
+                    md_path,
+                    figures=figure_results,
+                    tables=tables,
+                    equations=[],
+                    provider=provider,
+                    model=model,
+                    text_endpoint=text_endpoint,
+                    verbose=True,
+                )
+            )
+            console.print(f"      Synthesis complete ({len(result)} chars)")
+        except Exception as e:
+            console.print(f"[yellow]      Synthesis failed:[/yellow] {e}")
+
+    # ── Summary ───────────────────────────────────────────────────────
     content = md_path.read_text(encoding="utf-8")
     line_count = content.count("\n")
 
     console.print("\n[bold green]Done![/bold green]")
     console.print(f"  Markdown: {md_path} ({line_count} lines)")
     console.print(f"  Images:   {doc_dir / 'img'} ({len(images)} figures)")
-    if use_enrichments:
-        console.print(f"  Enrichments: {doc_dir / 'enrichments.json'}")
+    if tables:
+        console.print(f"  Tables:   {len(tables)} extracted")
+    if figure_results:
+        console.print(f"  Figures:  {doc_dir / 'figures.json'}")
 
 
 # =============================================================================

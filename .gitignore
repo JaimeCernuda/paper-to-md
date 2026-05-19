@@ -51,6 +51,11 @@ papers/
 test_output/
 test_output_high/
 papers-to-convert/
+out/
 *.pdf
 AGENTS.md
 CODEX.md
+CLIO.md
+NEXT_SESSION_*.md
+repomix-output.xml
+.clio/
