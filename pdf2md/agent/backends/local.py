@@ -298,35 +298,47 @@ One classification per line, nothing else."""
 FIGURE_DESCRIPTION_SYSTEM = """\
 You are an expert at analyzing figures from academic research papers. \
 You produce precise, factual descriptions that capture the key information \
-conveyed by each figure. Your descriptions will be embedded in the paper's \
-markdown as figure captions for downstream academic review."""
+conveyed by each figure. Your descriptions will be stored as figure metadata \
+for downstream academic review."""
 
 FIGURE_DESCRIPTION_PROMPT = """\
-Describe this figure from an academic research paper. Follow these guidelines:
+Describe this figure from an academic research paper in exhaustive detail. \
+Your description will serve as the sole reference for someone who cannot see \
+the figure, so nothing should be omitted.
 
 STRUCTURE YOUR DESCRIPTION AS:
-1. **Type**: What kind of figure this is (bar chart, line graph, architecture diagram, \
-flowchart, heatmap, scatter plot, system diagram, photograph, etc.)
-2. **Content**: The key elements, labels, axes, data series, or components shown
-3. **Findings**: The main trend, comparison, or relationship the figure demonstrates
-4. **Details**: Notable annotations, legends, color coding, or scale information
 
-EXAMPLE DESCRIPTIONS:
+1. **Type & Layout**: What kind of figure this is (bar chart, line graph, \
+architecture diagram, flowchart, heatmap, scatter plot, system diagram, \
+photograph, multi-panel, etc.). If multi-panel, describe the layout (e.g., \
+2x2 grid, side-by-side, stacked).
 
-Example 1 (performance chart):
-"Bar chart comparing throughput (MB/s) across four storage systems (ext4, XFS, BtrFS, \
-ZFS) for sequential and random I/O workloads. Sequential reads reach 2.1 GB/s on XFS \
-while random writes peak at 450 MB/s on ext4. Error bars show standard deviation across \
-5 runs. ZFS shows the highest variance in random workloads."
+2. **Every Visual Element**: Enumerate ALL components, labels, axes, data \
+series, nodes, arrows, boxes, legends, annotations, and text visible in the \
+figure. For charts: list every axis label, tick mark range, unit, data series \
+name, and color. For diagrams: list every box, arrow, connection, label, and \
+grouping. Do not skip any element.
 
-Example 2 (architecture diagram):
-"System architecture diagram showing three layers: a client tier with REST API gateway, \
-a processing tier with four worker nodes connected via message queue, and a storage tier \
-with distributed object store and metadata database. Arrows indicate data flow from \
-ingestion through processing to storage. The processing tier highlights GPU-accelerated \
-inference nodes in orange."
+3. **Quantitative Data**: Report ALL numerical values, data points, peak \
+values, ranges, percentages, and measurements you can read from the figure. \
+If a bar chart shows 5 bars, report all 5 values. If a line graph has \
+identifiable data points, report them.
 
-YOUR DESCRIPTION (2-5 sentences, factual, no speculation):"""
+4. **Relationships & Findings**: Describe the main trends, comparisons, or \
+relationships the figure demonstrates. What is the takeaway? How do different \
+data series or components relate to each other?
+
+5. **Visual Encoding**: Color scheme, patterns, fill styles, line styles \
+(solid/dashed/dotted), marker shapes, opacity, font sizes, and any visual \
+hierarchy. Describe the color of each element precisely.
+
+6. **Annotations & Context**: Captions, subcaptions, footnotes, conference \
+headers, watermarks, callout boxes, highlighted regions, or any other text \
+overlaid on the figure.
+
+Be thorough and precise. Write as many sentences as needed to fully capture \
+every piece of information in the figure. Aim for a comprehensive description \
+that could reconstruct the figure from text alone."""
 
 
 EQUATION_RECONSTRUCTION_PROMPT = """\
@@ -433,7 +445,7 @@ async def _vlm_call(
     config,
     *,
     system: str | None = None,
-    max_tokens: int = 2048,
+    max_tokens: int = 8192,
     temperature: float = 0.2,
 ) -> str:
     """Single VLM completion call via LiteLLM with base64 image.
@@ -466,7 +478,7 @@ async def _vlm_call(
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "timeout": 300,
+        "timeout": 600,
     }
 
     if config.api_base:
@@ -477,20 +489,23 @@ async def _vlm_call(
     msg = response.choices[0].message
     content = msg.content or ""
 
-    # For thinking models: extract reasoning summary if present
-    thinking_match = re.search(r"<think>(.*?)</think>", content, flags=re.DOTALL)
-    thinking_summary = ""
-    if thinking_match:
-        thinking_text = thinking_match.group(1).strip()
-        # Extract the last 1-2 sentences of thinking as supplementary detail
-        sentences = re.split(r"(?<=[.!?])\s+", thinking_text)
-        if len(sentences) > 2:
-            thinking_summary = " ".join(sentences[-2:])
-        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-
-    # Append condensed reasoning if it adds value
-    if thinking_summary and content and len(thinking_summary) < len(content):
-        content = content.rstrip() + " " + thinking_summary
+    # For thinking models: extract the useful content regardless of how
+    # the model structured its <think> blocks.
+    if "<think>" in content:
+        if "</think>" in content:
+            # Closed think block(s). Prefer content outside them.
+            after_think = re.sub(
+                r"<think>.*?</think>", "", content, flags=re.DOTALL
+            ).strip()
+            if after_think:
+                content = after_think
+            else:
+                # Everything was inside <think>. Salvage it.
+                content = re.sub(r"</?think>", "", content).strip()
+        else:
+            # Unclosed <think> (model hit max_tokens mid-thought).
+            # Strip the orphaned tag and keep all the content.
+            content = content.replace("<think>", "").strip()
 
     return content
 
