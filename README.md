@@ -27,7 +27,9 @@ uv run pdf2md convert paper.pdf ./output -d low
 
 # Full pipeline with local LLM + VLM
 LM_STUDIO_HOST=http://localhost:1234/v1 \
+PDF2MD_TEXT_MODEL=nemotron-cascade-2-30b-a3b-i1 \
 PDF2MD_VLM_HOST=http://localhost:8081/v1 \
+PDF2MD_VLM_MODEL=qwen3-vl-30b \
 uv run pdf2md convert paper.pdf ./output -d high --local
 ```
 
@@ -175,7 +177,7 @@ At `depth=high`, the synthesis pass:
 1. Detects equation regions (high concentration of math unicode)
 2. Sends garbled equations to the LLM for LaTeX reconstruction
 3. Programmatically fixes section hierarchy
-4. Inserts VLM figure descriptions as blockquote captions
+4. Inserts VLM figure descriptions as invisible HTML comments after figure images
 5. Removes `<!-- formula-not-decoded -->` placeholders
 6. Sends sections with remaining garbled unicode to the LLM for cleanup
 7. Preserves every character of original text (edit-based, not regenerative)
@@ -212,6 +214,15 @@ uv run pdf2md convert paper.pdf ./output -d high --local \
 | `LM_STUDIO_HOST` | `http://localhost:1234/v1` | Text LLM endpoint |
 | `PDF2MD_VLM_HOST` | `http://localhost:1234/v1` | VLM endpoint |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama endpoint |
+
+### Local AI Notes
+
+- `--local` defaults to LM Studio unless `--provider` or `PDF2MD_PROVIDER` is set.
+- Text and vision endpoints are independent. Use `LM_STUDIO_HOST` for retouch/synthesis and `PDF2MD_VLM_HOST` for figure descriptions.
+- If the default model names are left in place, pdf2md queries `/v1/models` and prefers a loaded Nemotron text model or a loaded VLM model when the endpoint exposes one.
+- High-depth figure descriptions are intentionally long. The VLM call allows larger responses and a longer timeout so thinking VLMs can finish exhaustive chart/diagram descriptions.
+- Thinking tags are stripped from final figure descriptions. If a thinking model emits only an unclosed `<think>` block before hitting its token limit, pdf2md keeps the useful text instead of returning an empty caption.
+- In the homelab setup, the tested endpoints are `http://192.168.86.143:1234/v1` for Nemotron text work and `http://192.168.86.141:8081/v1` for Qwen3-VL figure descriptions.
 
 ## Installation
 
